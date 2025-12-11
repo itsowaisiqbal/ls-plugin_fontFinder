@@ -75,69 +75,100 @@ export class FontFinder extends PanelPlugin {
 
   
   createWidget(parentWidget) {
-    // Step 1: Create container widget
+    // Modern, clean UI with proper styling
     const container = new Ui.Widget(parentWidget);
-
     const dummyPreviewText = "The quick brown fox jumps over the lazy dog 123";
     
-    // Step 2: Create main horizontal layout (left: fonts, right: preview/typing)
+    // Main layout with better spacing
     const mainLayout = new Ui.BoxLayout();
     mainLayout.setDirection(Ui.Direction.LeftToRight);
-    mainLayout.spacing = 14;
-    mainLayout.setContentsMargins(12, 12, 12, 12);
+    mainLayout.spacing = 0;
+    mainLayout.setContentsMargins(0, 0, 0, 0);
     container.layout = mainLayout;
     
-    // Step 3: Create left side container (for tabs and font list)
+    // Left sidebar - font list
     const leftSide = new Ui.Widget(container);
     const leftLayout = new Ui.BoxLayout();
     leftLayout.setDirection(Ui.Direction.TopToBottom);
-    leftLayout.spacing = 8;
+    leftLayout.spacing = 0;
     leftSide.layout = leftLayout;
-    leftSide.setFixedWidth(230); // Sidebar width
+    leftSide.setFixedWidth(240);
     
-    // Step 4: Create TabBar
-    const tabBar = new Ui.TabBar(leftSide);
-    tabBar.addTab("Fonts");
+    // Header for font list
+    const fontHeader = new Ui.Label(leftSide);
+    fontHeader.text = "FONTS";
+    fontHeader.setFixedHeight(40);
     
-    // Step 5: Create scrollable area for font list
+    // Scrollable font list
     const fontScrollArea = new Ui.VerticalScrollArea(leftSide);
-    
-    // Step 6: Create container for font list items
     const fontListContainer = new Ui.Widget(fontScrollArea);
     const fontListLayout = new Ui.BoxLayout();
     fontListLayout.setDirection(Ui.Direction.TopToBottom);
-    fontListLayout.spacing = 4;
+    fontListLayout.spacing = 0;
     fontListContainer.layout = fontListLayout;
-    
-    // Set the widget for scroll area
     fontScrollArea.setWidget(fontListContainer);
     
-    // Step 7: Create right side container (for branding, preview, typing)
+    // Right side - preview and controls
     const rightSide = new Ui.Widget(container);
     const rightLayout = new Ui.BoxLayout();
     rightLayout.setDirection(Ui.Direction.TopToBottom);
-    rightLayout.spacing = 12;
+    rightLayout.spacing = 16;
     rightSide.layout = rightLayout;
     
-    // Step 8: Create branding label
-    const brandingLabel = new Ui.Label(rightSide);
-    brandingLabel.text = "fontFinder © 2025 by itsowaisiqbal";
+    // Top bar with branding and variant selector
+    const topBar = new Ui.Widget(rightSide);
+    const topBarLayout = new Ui.BoxLayout();
+    topBarLayout.setDirection(Ui.Direction.LeftToRight);
+    topBarLayout.spacing = 16;
+    topBarLayout.setContentsMargins(20, 16, 20, 0);
+    topBar.layout = topBarLayout;
     
-    // Step 9: Create preview area using WebEngineView to display fonts
-    const previewArea = new Ui.WebEngineView(rightSide);
-    previewArea.setFixedHeight(260); // Set a fixed height for preview
-    const previewSpinner = new Ui.ProgressIndicator(rightSide);
-    previewSpinner.setFixedHeight(16);
+    const brandingLabel = new Ui.Label(topBar);
+    brandingLabel.text = "fontFinder";
     
-    // Step 10: Create typing area
-    const typingArea = new Ui.TextEdit(rightSide);
-    typingArea.placeholderText = "Type here to see preview...";
+    // Variants dropdown in top bar
+    const variantsDropdown = new Ui.ComboBox(topBar);
+    variantsDropdown.setFixedHeight(32);
+    variantsDropdown.setFixedWidth(180);
+    
+    topBarLayout.addWidget(brandingLabel);
+    topBarLayout.addStretch(1);
+    topBarLayout.addWidget(variantsDropdown);
+    
+    // Preview area - larger, cleaner
+    const previewContainer = new Ui.Widget(rightSide);
+    previewContainer.setContentsMargins(20, 0, 20, 0);
+    const previewLayout = new Ui.BoxLayout();
+    previewLayout.setDirection(Ui.Direction.TopToBottom);
+    previewLayout.spacing = 8;
+    previewContainer.layout = previewLayout;
+    
+    const previewArea = new Ui.WebEngineView(previewContainer);
+    previewArea.setFixedHeight(300);
+    const previewSpinner = new Ui.ProgressIndicator(previewContainer);
+    previewSpinner.setFixedHeight(20);
+    
+    previewLayout.addWidget(previewArea);
+    previewLayout.addWidget(previewSpinner);
+    
+    // Typing area - modern input
+    const typingContainer = new Ui.Widget(rightSide);
+    typingContainer.setContentsMargins(20, 0, 20, 16);
+    const typingLayout = new Ui.BoxLayout();
+    typingLayout.setDirection(Ui.Direction.TopToBottom);
+    typingLayout.spacing = 8;
+    typingContainer.layout = typingLayout;
+    
+    const typingLabel = new Ui.Label(typingContainer);
+    typingLabel.text = "Custom Text";
+    
+    const typingArea = new Ui.TextEdit(typingContainer);
+    typingArea.placeholderText = "Type to preview...";
     typingArea.plainText = dummyPreviewText;
-    typingArea.setFixedHeight(140);
+    typingArea.setFixedHeight(100);
     
-    // Step 11: Variants section (styles)
-    const variantsDropdown = new Ui.ComboBox(rightSide);
-    variantsDropdown.setFixedHeight(26);
+    typingLayout.addWidget(typingLabel);
+    typingLayout.addWidget(typingArea);
     
     // Helper to format variant label
     const formatVariant = (variant) => {
@@ -159,7 +190,8 @@ export class FontFinder extends PanelPlugin {
     
     // State
     let selectedVariant = null;
-    const fontButtons = [];
+    const fontLabels = [];
+    const fontNames = [];
     const variantOptions = [];
     
     // Function to update preview with selected font, variant, and text
@@ -228,9 +260,9 @@ export class FontFinder extends PanelPlugin {
     // Helper to set selected font and refresh UI
     const setSelectedFont = (font, itemIndex) => {
       this.selectedFont = font;
-      // Update button states (use checkable buttons for selection)
-      fontButtons.forEach((btn, i) => {
-        btn.checked = i === itemIndex;
+      // Update radio button selection (automatic highlighting)
+      fontLabels.forEach((item, i) => {
+        item.checked = (i === itemIndex);
       });
       buildVariantDropdown(font);
       updatePreview();
@@ -246,25 +278,26 @@ export class FontFinder extends PanelPlugin {
         console.log("[FontFinder] Fonts loaded, creating UI buttons...");
         
         fontListLayout.clear(Ui.ClearLayoutBehavior.DeleteClearedWidgets);
+        fontLabels.length = 0;
+        fontNames.length = 0;
         
         fonts.forEach((font, index) => {
-          // Use PushButton styled as text for clickable font list items
-          const fontButton = new Ui.PushButton(fontListContainer);
-          fontButton.text = font.family;
-          fontButton.setFixedHeight(28);
-          fontButton.checkable = true;
-          fontButton.checked = false;
+          // Create a radio button styled as a list item (no checkbox visible, just highlighting)
+          const fontItem = new Ui.RadioButton(fontListContainer);
+          fontItem.text = "  " + font.family; // Padding for clean look
+          fontItem.setFixedHeight(32);
           
-          fontButton.onClick.connect(() => {
-            console.log(`[FontFinder] Font clicked: ${font.family}`);
+          fontItem.onClick.connect(() => {
+            console.log(`[FontFinder] Font selected: ${font.family}`);
             setSelectedFont(font, index);
           });
           
-          fontButtons.push(fontButton);
-          fontListLayout.addWidget(fontButton);
+          fontLabels.push(fontItem);
+          fontNames.push(font.family);
+          fontListLayout.addWidget(fontItem);
         });
         
-        console.log(`[FontFinder] Created ${fontButtons.length} font buttons`);
+        console.log(`[FontFinder] Created ${fontLabels.length} font items`);
         
         // Select the first font by default
         if (fonts.length > 0) {
@@ -315,15 +348,13 @@ export class FontFinder extends PanelPlugin {
       }
     });
     
-    // Step 13: Add widgets to layouts
-    leftLayout.addWidget(tabBar);
+    // Assemble UI
+    leftLayout.addWidget(fontHeader);
     leftLayout.addWidget(fontScrollArea);
     
-    rightLayout.addWidget(brandingLabel);
-    rightLayout.addWidget(previewArea);
-    rightLayout.addWidget(previewSpinner);
-    rightLayout.addWidget(variantsDropdown);
-    rightLayout.addWidget(typingArea);
+    rightLayout.addWidget(topBar);
+    rightLayout.addWidget(previewContainer);
+    rightLayout.addWidget(typingContainer);
     
     mainLayout.addWidget(leftSide);
     mainLayout.addWidget(rightSide);
