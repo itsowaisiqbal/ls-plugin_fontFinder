@@ -13,7 +13,7 @@ export class FontFinder extends PanelPlugin {
   static descriptor() {
     return {
       id: 'com.itsowaisiqbal.fontfinder',
-      name: 'Font Finder',
+      name: 'fontFinder',
       description: 'Search, preview, and import Google Fonts directly into your Lens Studio project.',
       
       dependencies: [Ui.IGui],
@@ -28,13 +28,15 @@ export class FontFinder extends PanelPlugin {
 
   
   createWidget(parentWidget) {
-    // Implement createWidget logic
+
+    const label = new Ui.Label(parentWidget)
+    label.text = "Hello World"
+    return label
   }
   
   
   
   deinit() {
-    // Implement cleanup logic for GUI plugins
   }
   
 }
