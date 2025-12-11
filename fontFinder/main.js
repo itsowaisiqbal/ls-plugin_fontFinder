@@ -28,6 +28,8 @@ export class FontFinder extends PanelPlugin {
     super(pluginSystem);
     this.fonts = []; // Store fetched fonts
     this.selectedFont = null; // Store selected font
+    this.selectedVariant = null; // Store selected variant
+    this.updateTimeout = null; // Debounce timer for preview updates
     console.log("[FontFinder] Plugin initialized");
   }
 
@@ -151,24 +153,28 @@ export class FontFinder extends PanelPlugin {
     previewLayout.addWidget(previewArea);
     previewLayout.addWidget(previewSpinner);
     
-    // Typing area - modern input
+    // Typing area - single cohesive component with label and input
     const typingContainer = new Ui.Widget(rightSide);
     typingContainer.setContentsMargins(20, 0, 20, 16);
+    typingContainer.setMinimumHeight(140);
     const typingLayout = new Ui.BoxLayout();
     typingLayout.setDirection(Ui.Direction.TopToBottom);
-    typingLayout.spacing = 8;
+    typingLayout.spacing = 6;
+    typingLayout.setContentsMargins(0, 0, 0, 0);
     typingContainer.layout = typingLayout;
     
     const typingLabel = new Ui.Label(typingContainer);
     typingLabel.text = "Custom Text";
+    typingLabel.setFixedHeight(20);
     
     const typingArea = new Ui.TextEdit(typingContainer);
     typingArea.placeholderText = "Type to preview...";
     typingArea.plainText = dummyPreviewText;
-    typingArea.setFixedHeight(100);
+    typingArea.setMinimumHeight(100);
     
     typingLayout.addWidget(typingLabel);
     typingLayout.addWidget(typingArea);
+    typingLayout.addStretch(0);
     
     // Helper to format variant label
     const formatVariant = (variant) => {
@@ -194,13 +200,15 @@ export class FontFinder extends PanelPlugin {
     const fontNames = [];
     const variantOptions = [];
     
-    // Function to update preview with selected font, variant, and text
+    // Optimized preview update with Google Fonts CDN (fast loading with display=swap)
     const updatePreview = () => {
       const text = typingArea.plainText || dummyPreviewText;
       const fontFamily = this.selectedFont ? this.selectedFont.family : "Arial";
       const variant = selectedVariant || "regular";
       const { weight, isItalic } = parseVariant(variant);
       const ital = isItalic ? 1 : 0;
+      
+      // Use optimized Google Fonts URL with display=swap for faster loading
       const googleFamilyParam = `${encodeURIComponent(fontFamily)}:ital,wght@${ital},${weight}`;
       
       const html = `
@@ -208,19 +216,22 @@ export class FontFinder extends PanelPlugin {
         <html>
         <head>
           <meta charset="UTF-8">
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link href="https://fonts.googleapis.com/css2?family=${googleFamilyParam}&display=swap" rel="stylesheet">
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=${googleFamilyParam}&display=swap');
             body {
               margin: 0;
               padding: 20px;
-              font-family: '${fontFamily}', sans-serif;
-              font-size: 24px;
+              font-family: '${fontFamily}', -apple-system, BlinkMacSystemFont, sans-serif;
+              font-size: 32px;
               font-weight: ${weight};
               font-style: ${isItalic ? "italic" : "normal"};
-              background: #f5f6f7;
+              background: #ffffff;
               color: #1f1f1f;
               word-wrap: break-word;
               overflow-wrap: break-word;
+              line-height: 1.5;
             }
           </style>
         </head>
@@ -231,13 +242,9 @@ export class FontFinder extends PanelPlugin {
       `;
       
       const dataUri = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
-      previewSpinner.start();
       previewArea.load(dataUri);
-      previewArea.onLoadFinished.connect(() => {
-        previewSpinner.stop();
-      });
       
-      console.log(`[FontFinder] Preview updated with font: ${fontFamily}, variant: ${variant}`);
+      console.log(`[FontFinder] Preview updated: ${fontFamily} ${variant}`);
     };
     
     // Helper to clear variant buttons
@@ -340,12 +347,18 @@ export class FontFinder extends PanelPlugin {
       }
     });
     
-    // Step 12: Connect typing area to preview (real-time updates)
+    // Step 12: Connect typing area to preview (debounced for better performance)
     typingArea.onTextChange.connect(() => {
-      updatePreview();
-      if (this.selectedFont) {
-        console.log(`[FontFinder] Text changed. Selected font: ${this.selectedFont.family}`);
+      // Debounce updates to avoid excessive reloads while typing
+      if (this.updateTimeout) {
+        clearTimeout(this.updateTimeout);
       }
+      this.updateTimeout = setTimeout(() => {
+        updatePreview();
+        if (this.selectedFont) {
+          console.log(`[FontFinder] Text changed. Selected font: ${this.selectedFont.family}`);
+        }
+      }, 300); // 300ms debounce
     });
     
     // Assemble UI
@@ -365,6 +378,11 @@ export class FontFinder extends PanelPlugin {
   
   
   deinit() {
+    // Clean up timers
+    if (this.updateTimeout) {
+      clearTimeout(this.updateTimeout);
+    }
+    console.log("[FontFinder] Plugin deinitialized");
   }
   
 }
