@@ -2,10 +2,6 @@
   "main": "main.js",
   "permissions": [
     "filesystem",
-    "network",
-    "asset_library",
-    "shell",
-    "subprocess",
-    "snap_auth_token"
+    "network"
   ]
 }
