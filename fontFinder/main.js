@@ -126,6 +126,8 @@ export class FontFinder extends PanelPlugin {
     // Step 9: Create preview area using WebEngineView to display fonts
     const previewArea = new Ui.WebEngineView(rightSide);
     previewArea.setFixedHeight(260); // Set a fixed height for preview
+    const previewSpinner = new Ui.ProgressIndicator(rightSide);
+    previewSpinner.setFixedHeight(16);
     
     // Step 10: Create typing area
     const typingArea = new Ui.TextEdit(rightSide);
@@ -134,11 +136,8 @@ export class FontFinder extends PanelPlugin {
     typingArea.setFixedHeight(140);
     
     // Step 11: Variants section (styles)
-    const variantsContainer = new Ui.Widget(rightSide);
-    const variantsLayout = new Ui.BoxLayout();
-    variantsLayout.setDirection(Ui.Direction.LeftToRight);
-    variantsLayout.spacing = 6;
-    variantsContainer.layout = variantsLayout;
+    const variantsDropdown = new Ui.ComboBox(rightSide);
+    variantsDropdown.setFixedHeight(26);
     
     // Helper to format variant label
     const formatVariant = (variant) => {
@@ -161,7 +160,7 @@ export class FontFinder extends PanelPlugin {
     // State
     let selectedVariant = null;
     const fontButtons = [];
-    const variantButtons = [];
+    const variantOptions = [];
     
     // Function to update preview with selected font, variant, and text
     const updatePreview = () => {
@@ -200,50 +199,40 @@ export class FontFinder extends PanelPlugin {
       `;
       
       const dataUri = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+      previewSpinner.start();
       previewArea.load(dataUri);
+      previewArea.onLoadFinished.connect(() => {
+        previewSpinner.stop();
+      });
       
       console.log(`[FontFinder] Preview updated with font: ${fontFamily}, variant: ${variant}`);
     };
     
     // Helper to clear variant buttons
-    const clearVariantButtons = () => {
-      variantsLayout.clear(Ui.ClearLayoutBehavior.DeleteClearedWidgets);
-      while (variantButtons.length) variantButtons.pop();
-    };
-    
-    // Build variant buttons for selected font
-    const buildVariantButtons = (font) => {
-      clearVariantButtons();
+    const buildVariantDropdown = (font) => {
+      variantsDropdown.clear();
+      variantOptions.length = 0;
       const variants = font && font.variants ? font.variants : ["regular"];
       variants.forEach((variant, idx) => {
-        const btn = new Ui.PushButton(variantsContainer);
-        btn.text = formatVariant(variant);
-        btn.setFixedHeight(26);
-        btn.checkable = true;
-        btn.checked = idx === 0;
-        
-        btn.onClick.connect(() => {
-          selectedVariant = variant;
-          variantButtons.forEach(b => b.checked = false);
-          btn.checked = true;
-          updatePreview();
-        });
-        
-        variantButtons.push(btn);
-        variantsLayout.addWidget(btn);
+        variantsDropdown.addItem(formatVariant(variant));
+        variantOptions[idx] = variant;
       });
-      
-      // Default variant selection
       selectedVariant = variants.length ? variants[0] : "regular";
+      // Track selected index manually since currentIndex might not be available
+      if (variants.length > 0) {
+        // Select first item by setting it as current text
+        variantsDropdown.currentText = formatVariant(variants[0]);
+      }
     };
     
     // Helper to set selected font and refresh UI
-    const setSelectedFont = (font, buttonIndex) => {
+    const setSelectedFont = (font, itemIndex) => {
       this.selectedFont = font;
+      // Update button states (use checkable buttons for selection)
       fontButtons.forEach((btn, i) => {
-        btn.checked = i === buttonIndex;
+        btn.checked = i === itemIndex;
       });
-      buildVariantButtons(font);
+      buildVariantDropdown(font);
       updatePreview();
     };
     
@@ -259,6 +248,7 @@ export class FontFinder extends PanelPlugin {
         fontListLayout.clear(Ui.ClearLayoutBehavior.DeleteClearedWidgets);
         
         fonts.forEach((font, index) => {
+          // Use PushButton styled as text for clickable font list items
           const fontButton = new Ui.PushButton(fontListContainer);
           fontButton.text = font.family;
           fontButton.setFixedHeight(28);
@@ -279,7 +269,6 @@ export class FontFinder extends PanelPlugin {
         // Select the first font by default
         if (fonts.length > 0) {
           setSelectedFont(fonts[0], 0);
-          fontButtons[0].checked = true;
         }
       })
       .catch(error => {
@@ -309,6 +298,15 @@ export class FontFinder extends PanelPlugin {
         console.error("[FontFinder] Font fetch error:", error);
       });
     
+    // Handle variants dropdown change
+    variantsDropdown.onCurrentTextChange.connect((txt) => {
+      const matchIdx = variantOptions.findIndex(v => formatVariant(v) === txt);
+      if (matchIdx >= 0) {
+        selectedVariant = variantOptions[matchIdx];
+        updatePreview();
+      }
+    });
+    
     // Step 12: Connect typing area to preview (real-time updates)
     typingArea.onTextChange.connect(() => {
       updatePreview();
@@ -323,7 +321,8 @@ export class FontFinder extends PanelPlugin {
     
     rightLayout.addWidget(brandingLabel);
     rightLayout.addWidget(previewArea);
-    rightLayout.addWidget(variantsContainer);
+    rightLayout.addWidget(previewSpinner);
+    rightLayout.addWidget(variantsDropdown);
     rightLayout.addWidget(typingArea);
     
     mainLayout.addWidget(leftSide);
