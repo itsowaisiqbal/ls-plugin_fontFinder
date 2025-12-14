@@ -7,6 +7,7 @@ import * as Serialization from "LensStudio:Serialization";
 import * as Shell from "LensStudio:Shell";
 import * as Ui from "LensStudio:Ui";
 import * as Network from "LensStudio:Network";
+import * as FileSystem from "LensStudio:FileSystem";
 import { GOOGLE_FONTS_API_KEY } from "./config.js";
 
 
@@ -30,15 +31,113 @@ export class FontFinder extends PanelPlugin {
     this.selectedFont = null; // Store selected font
     this.selectedVariant = null; // Store selected variant
     this.updateTimeout = null; // Debounce timer for preview updates
-    console.log("[FontFinder] Plugin initialized");
+    this.panelWidget = null; // Reference to the panel widget for closing
+    this.tempDirs = []; // Keep references to temp directories to prevent garbage collection
+  }
+  
+  // Download font and import into Lens Studio
+  downloadAndImportFont(font, variant) {
+    const fontFamily = font.family;
+    const fontData = this.fonts.find(f => f.family === fontFamily);
+    
+    if (!fontData || !fontData.files || !fontData.files[variant]) {
+      return Promise.reject(new Error(`Font file not found for ${fontFamily} ${variant}`));
+    }
+    
+    const fontUrl = fontData.files[variant];
+    
+    return new Promise((resolve, reject) => {
+      const request = new Network.HttpRequest();
+      request.url = fontUrl;
+      request.method = Network.HttpRequest.Method.Get;
+      
+      Network.performHttpRequest(request, (response) => {
+        if (response.statusCode === 200) {
+          try {
+            // Create temp directory for font file and keep reference to prevent garbage collection
+            const tempDir = FileSystem.TempDir.create();
+            this.tempDirs.push(tempDir);
+            
+            const fontExtension = fontUrl.endsWith('.woff2') ? '.woff2' : '.ttf';
+            const sanitizedName = fontFamily.replace(/[^a-zA-Z0-9]/g, '_');
+            const fileName = `${sanitizedName}_${variant}${fontExtension}`;
+            const tempFilePath = tempDir.path.appended(new Editor.Path(fileName));
+            
+            // Write font bytes to temp file
+            const fontBytes = response.body.toBytes();
+            FileSystem.writeFile(tempFilePath, fontBytes);
+            
+            // Verify file exists
+            if (!FileSystem.exists(tempFilePath)) {
+              reject(new Error('Failed to write temp file'));
+              return;
+            }
+            
+            // Import font into Lens Studio project
+            const model = this.pluginSystem.findInterface(Editor.Model.IModel);
+            const assetManager = model.project.assetManager;
+            
+            // Create folder structure: fontFinder / FontFamily /
+            const fontFinderFolder = `fontFinder`;
+            const fontFamilyFolder = `${fontFinderFolder}/${fontFamily}`;
+            
+            // Import the font file
+            const importResult = assetManager.importExternalFile(
+              tempFilePath,
+              fontFamilyFolder,
+              Editor.Model.ResultType.Auto
+            );
+            
+            // Clean up temp directory
+            const tempDirIndex = this.tempDirs.indexOf(tempDir);
+            if (tempDirIndex > -1) {
+              this.tempDirs.splice(tempDirIndex, 1);
+            }
+            
+            // Get the imported asset
+            let fontAsset = null;
+            if (importResult) {
+              if (importResult.primary) {
+                fontAsset = importResult.primary;
+              } else if (importResult.asset) {
+                fontAsset = importResult.asset;
+              } else {
+                fontAsset = importResult;
+              }
+            }
+            
+            if (fontAsset && fontAsset.name) {
+              console.log(`[FontFinder] ✓ Downloaded: ${fontFamily} ${variant} → Assets/${fontFamilyFolder}/${fontAsset.name}`);
+              resolve({ 
+                fontAsset, 
+                folder: fontFamilyFolder,
+                fontFamily,
+                variant 
+              });
+            } else {
+              reject(new Error('Font asset not found in import result'));
+            }
+            
+          } catch (error) {
+            console.error(`[FontFinder] Error:`, error.message);
+            reject(error);
+          }
+        } else {
+          reject(new Error(`Download failed with status: ${response.statusCode}`));
+        }
+      });
+    });
   }
 
   // Function to fetch fonts from Google Fonts API (top 25 by popularity)
   async fetchFonts() {
-    const url = `https://www.googleapis.com/webfonts/v1/webfonts?sort=popularity&key=${GOOGLE_FONTS_API_KEY}`;
+    // Check API key first
+    if (!GOOGLE_FONTS_API_KEY || GOOGLE_FONTS_API_KEY.trim() === '') {
+      console.error(`[FontFinder] Google Fonts API key is not configured. Please add your API key to config.js`);
+      return Promise.reject(new Error('Google Fonts API key is not configured'));
+    }
     
-    console.log("[FontFinder] Starting font fetch from Google Fonts API...");
-    console.log("[FontFinder] API URL:", url);
+    const url = `https://www.googleapis.com/webfonts/v1/webfonts?sort=popularity&key=${GOOGLE_FONTS_API_KEY}`;
     
     return new Promise((resolve, reject) => {
       const request = new Network.HttpRequest();
@@ -46,30 +145,25 @@ export class FontFinder extends PanelPlugin {
       request.method = Network.HttpRequest.Method.Get;
       
       Network.performHttpRequest(request, (response) => {
-        console.log("[FontFinder] API Response Status:", response.statusCode);
-        
         if (response.statusCode === 200) {
           try {
             const bodyString = response.body.toString();
             const data = JSON.parse(bodyString);
             const allFonts = data.items || [];
-            
-            console.log("[FontFinder] Total fonts fetched:", allFonts.length);
-            
             const topFonts = allFonts.slice(0, 25);
-            console.log("[FontFinder] Using top 25 fonts by popularity");
-            topFonts.forEach(font => {
-              console.log("[FontFinder] - Font:", font.family, "Variants:", font.variants);
-            });
             
+            console.log(`[FontFinder] Loaded ${topFonts.length} fonts`);
             resolve(topFonts);
           } catch (error) {
             console.error("[FontFinder] Error parsing font data:", error);
-            reject(new Error("Failed to parse font data: " + error));
+            reject(new Error("Failed to parse font data"));
           }
         } else {
-          console.error("[FontFinder] API request failed with status:", response.statusCode);
-          reject(new Error(`API request failed with status: ${response.statusCode}`));
+          if (response.statusCode === 400 || response.statusCode === 403) {
+            reject(new Error(`API key error. Please check your Google Fonts API key in config.js`));
+          } else {
+            reject(new Error(`API request failed with status: ${response.statusCode}`));
+          }
         }
       });
     });
@@ -79,7 +173,6 @@ export class FontFinder extends PanelPlugin {
   createWidget(parentWidget) {
     // Modern, clean UI with proper styling
     const container = new Ui.Widget(parentWidget);
-    const dummyPreviewText = "The quick brown fox jumps over the lazy dog 123";
     
     // Main layout with better spacing
     const mainLayout = new Ui.BoxLayout();
@@ -133,9 +226,16 @@ export class FontFinder extends PanelPlugin {
     variantsDropdown.setFixedHeight(32);
     variantsDropdown.setFixedWidth(180);
     
+    // Download button
+    const downloadButton = new Ui.PushButton(topBar);
+    downloadButton.text = "Download Font";
+    downloadButton.setFixedHeight(32);
+    downloadButton.setFixedWidth(140);
+    
     topBarLayout.addWidget(brandingLabel);
     topBarLayout.addStretch(1);
     topBarLayout.addWidget(variantsDropdown);
+    topBarLayout.addWidget(downloadButton);
     
     // Preview area - larger, cleaner
     const previewContainer = new Ui.Widget(rightSide);
@@ -164,12 +264,12 @@ export class FontFinder extends PanelPlugin {
     typingContainer.layout = typingLayout;
     
     const typingLabel = new Ui.Label(typingContainer);
-    typingLabel.text = "Custom Text";
+    typingLabel.text = "Preview Text";
     typingLabel.setFixedHeight(20);
     
     const typingArea = new Ui.TextEdit(typingContainer);
     typingArea.placeholderText = "Type to preview...";
-    typingArea.plainText = dummyPreviewText;
+    typingArea.plainText = "";
     typingArea.setMinimumHeight(100);
     
     typingLayout.addWidget(typingLabel);
@@ -200,15 +300,15 @@ export class FontFinder extends PanelPlugin {
     const fontNames = [];
     const variantOptions = [];
     
-    // Optimized preview update with Google Fonts CDN (fast loading with display=swap)
+    // Optimized preview update with Google Fonts CDN
     const updatePreview = () => {
-      const text = typingArea.plainText || dummyPreviewText;
+      const text = typingArea.plainText || "";
       const fontFamily = this.selectedFont ? this.selectedFont.family : "Arial";
       const variant = selectedVariant || "regular";
       const { weight, isItalic } = parseVariant(variant);
       const ital = isItalic ? 1 : 0;
       
-      // Use optimized Google Fonts URL with display=swap for faster loading
+      // Use optimized Google Fonts URL with display=block to prevent layout shift
       const googleFamilyParam = `${encodeURIComponent(fontFamily)}:ital,wght@${ital},${weight}`;
       
       const html = `
@@ -218,12 +318,12 @@ export class FontFinder extends PanelPlugin {
           <meta charset="UTF-8">
           <link rel="preconnect" href="https://fonts.googleapis.com">
           <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=${googleFamilyParam}&display=swap" rel="stylesheet">
+          <link href="https://fonts.googleapis.com/css2?family=${googleFamilyParam}&display=block" rel="stylesheet">
           <style>
             body {
               margin: 0;
               padding: 20px;
-              font-family: '${fontFamily}', -apple-system, BlinkMacSystemFont, sans-serif;
+              font-family: '${fontFamily}', sans-serif;
               font-size: 32px;
               font-weight: ${weight};
               font-style: ${isItalic ? "italic" : "normal"};
@@ -232,6 +332,12 @@ export class FontFinder extends PanelPlugin {
               word-wrap: break-word;
               overflow-wrap: break-word;
               line-height: 1.5;
+              min-height: 260px;
+              opacity: 0;
+              animation: fadeIn 0.2s ease-in forwards;
+            }
+            @keyframes fadeIn {
+              to { opacity: 1; }
             }
           </style>
         </head>
@@ -243,8 +349,6 @@ export class FontFinder extends PanelPlugin {
       
       const dataUri = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
       previewArea.load(dataUri);
-      
-      console.log(`[FontFinder] Preview updated: ${fontFamily} ${variant}`);
     };
     
     // Helper to clear variant buttons
@@ -275,6 +379,36 @@ export class FontFinder extends PanelPlugin {
       updatePreview();
     };
     
+    // Store panel reference
+    this.panelWidget = container;
+    
+    // Download button handler
+    downloadButton.onClick.connect(() => {
+      if (!this.selectedFont || !selectedVariant) {
+        return;
+      }
+      
+      downloadButton.text = "Downloading...";
+      downloadButton.enabled = false;
+      
+      this.downloadAndImportFont(this.selectedFont, selectedVariant)
+        .then(() => {
+          downloadButton.text = "✓ Downloaded";
+          setTimeout(() => {
+            downloadButton.text = "Download Font";
+            downloadButton.enabled = true;
+          }, 2000);
+        })
+        .catch((error) => {
+          console.error(`[FontFinder] Error:`, error.message);
+          downloadButton.text = "✗ Failed";
+          setTimeout(() => {
+            downloadButton.text = "Download Font";
+            downloadButton.enabled = true;
+          }, 2000);
+        });
+    });
+    
     // Initial preview (before fonts load)
     updatePreview();
     
@@ -282,7 +416,6 @@ export class FontFinder extends PanelPlugin {
     this.fetchFonts()
       .then(fonts => {
         this.fonts = fonts;
-        console.log("[FontFinder] Fonts loaded, creating UI buttons...");
         
         fontListLayout.clear(Ui.ClearLayoutBehavior.DeleteClearedWidgets);
         fontLabels.length = 0;
@@ -295,7 +428,6 @@ export class FontFinder extends PanelPlugin {
           fontItem.setFixedHeight(32);
           
           fontItem.onClick.connect(() => {
-            console.log(`[FontFinder] Font selected: ${font.family}`);
             setSelectedFont(font, index);
           });
           
@@ -303,8 +435,6 @@ export class FontFinder extends PanelPlugin {
           fontNames.push(font.family);
           fontListLayout.addWidget(fontItem);
         });
-        
-        console.log(`[FontFinder] Created ${fontLabels.length} font items`);
         
         // Select the first font by default
         if (fonts.length > 0) {
@@ -329,13 +459,13 @@ export class FontFinder extends PanelPlugin {
             </style>
           </head>
           <body>
-            Error fetching fonts: ${error.message}
+            Error: ${error.message}
           </body>
           </html>
         `;
         const errorDataUri = `data:text/html;charset=utf-8,${encodeURIComponent(errorHtml)}`;
         previewArea.load(errorDataUri);
-        console.error("[FontFinder] Font fetch error:", error);
+        console.error("[FontFinder]", error.message);
       });
     
     // Handle variants dropdown change
@@ -347,7 +477,7 @@ export class FontFinder extends PanelPlugin {
       }
     });
     
-    // Step 12: Connect typing area to preview (debounced for better performance)
+    // Connect typing area to preview (debounced for better performance)
     typingArea.onTextChange.connect(() => {
       // Debounce updates to avoid excessive reloads while typing
       if (this.updateTimeout) {
@@ -355,9 +485,6 @@ export class FontFinder extends PanelPlugin {
       }
       this.updateTimeout = setTimeout(() => {
         updatePreview();
-        if (this.selectedFont) {
-          console.log(`[FontFinder] Text changed. Selected font: ${this.selectedFont.family}`);
-        }
       }, 300); // 300ms debounce
     });
     
@@ -382,7 +509,11 @@ export class FontFinder extends PanelPlugin {
     if (this.updateTimeout) {
       clearTimeout(this.updateTimeout);
     }
-    console.log("[FontFinder] Plugin deinitialized");
+    
+    // Clean up temp directories
+    if (this.tempDirs && this.tempDirs.length > 0) {
+      this.tempDirs = [];
+    }
   }
   
 }
