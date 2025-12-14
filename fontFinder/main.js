@@ -286,7 +286,13 @@ export class FontFinder extends PanelPlugin {
     frameLayout.addWidget(typingArea);
 
     const separator = new Ui.Widget(container);
-    separator.setFixedHeight(4);
+    separator.setFixedHeight(12);
+    
+    const dividerLine = new Ui.Label(container);
+    dividerLine.text = "";
+    dividerLine.setFixedHeight(1);
+    dividerLine.autoFillBackground = true;
+    dividerLine.backgroundRole = Ui.ColorRole.Mid;
     
     const disclaimer = new Ui.Label(container);
     disclaimer.text = "ⓘ Google Fonts • Open Font License (OFL)";
@@ -707,6 +713,7 @@ export class FontFinder extends PanelPlugin {
     mainLayout.addWidget(fontScrollArea);
     
     mainLayout.addWidget(separator);
+    mainLayout.addWidget(dividerLine);
     
     mainLayout.addWidget(brandingLabel);
     mainLayout.addWidget(variantsDropdown);
