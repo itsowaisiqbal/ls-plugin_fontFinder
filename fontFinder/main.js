@@ -1,3 +1,11 @@
+/**
+ * FontFinder - Lens Studio Plugin
+ * 
+ * Browse and download 1,900+ Google Fonts directly into your Lens Studio project.
+ * All font data is loaded from fonts.json (no API key required).
+ * Fonts are organized by category: popular, game, branded, etc.
+ */
+
 import PanelPlugin from "LensStudio:PanelPlugin";
 import * as Subprocess from "LensStudio:Subprocess";
 import * as RemoteServiceModule from "LensStudio:RemoteServiceModule";
@@ -8,7 +16,8 @@ import * as Shell from "LensStudio:Shell";
 import * as Ui from "LensStudio:Ui";
 import * as Network from "LensStudio:Network";
 import * as FileSystem from "LensStudio:FileSystem";
-import { GOOGLE_FONTS_API_KEY } from "./config.js";
+import fontData from "./fonts.json";
+import { CUSTOM_CATEGORIES, CATEGORY_LABELS } from "./categories.js";
 
 
 
@@ -28,12 +37,14 @@ export class FontFinder extends PanelPlugin {
   constructor(pluginSystem) {
     super(pluginSystem);
     this.fonts = []; // Store fetched fonts
+    this.categoryFonts = []; // Raw fonts for current category
     this.selectedFont = null; // Store selected font
     this.selectedVariant = null; // Store selected variant
     this.updateTimeout = null; // Debounce timer for preview updates
     this.panelWidget = null; // Reference to the panel widget for closing
     this.tempDirs = []; // Keep references to temp directories to prevent garbage collection
     this.resetTimers = []; // Keep references to button reset timers
+    this.currentCategory = "all";
   }
   
   // Download font and import into Lens Studio
@@ -130,43 +141,61 @@ export class FontFinder extends PanelPlugin {
     });
   }
 
-  // Function to fetch fonts from Google Fonts API (top 25 by popularity)
-  async fetchFonts() {
-    // Check API key first
-    if (!GOOGLE_FONTS_API_KEY || GOOGLE_FONTS_API_KEY.trim() === '') {
-      console.error(`[FontFinder] Google Fonts API key is not configured. Please add your API key to config.js`);
-      return Promise.reject(new Error('Google Fonts API key is not configured'));
-    }
-    
-    const url = `https://www.googleapis.com/webfonts/v1/webfonts?sort=popularity&key=${GOOGLE_FONTS_API_KEY}`;
-    
+  // Load fonts from JSON file using custom categories
+  async fetchFonts(category = 'all', limit = 0) {
     return new Promise((resolve, reject) => {
-      const request = new Network.HttpRequest();
-      request.url = url;
-      request.method = Network.HttpRequest.Method.Get;
-      
-      Network.performHttpRequest(request, (response) => {
-        if (response.statusCode === 200) {
-          try {
-            const bodyString = response.body.toString();
-            const data = JSON.parse(bodyString);
-            const allFonts = data.items || [];
-            const topFonts = allFonts.slice(0, 25);
+      try {
+        let categoryFonts = [];
+        
+        if (category === 'all') {
+          // Combine all fonts from all categories, removing duplicates
+          const allFontsMap = {};
+          Object.values(fontData.categories || {}).forEach(catArr => {
+            (catArr || []).forEach(font => {
+              allFontsMap[font.family] = font;
+            });
+          });
+          categoryFonts = Object.values(allFontsMap);
+        } else if (CUSTOM_CATEGORIES[category]) {
+          // Use custom category mapping
+          const fontFamilies = CUSTOM_CATEGORIES[category];
+          
+          // Build a map of all available fonts for quick lookup
+          const allFontsMap = {};
+          Object.values(fontData.categories || {}).forEach(catArr => {
+            (catArr || []).forEach(font => {
+              allFontsMap[font.family] = font;
+            });
+          });
+          
+          // Filter fonts based on custom category list
+          categoryFonts = fontFamilies
+            .map(familyName => allFontsMap[familyName])
+            .filter(font => font !== undefined);
             
-            console.log(`[FontFinder] Loaded ${topFonts.length} fonts`);
-            resolve(topFonts);
-          } catch (error) {
-            console.error("[FontFinder] Error parsing font data:", error);
-            reject(new Error("Failed to parse font data"));
-          }
+          console.log(`[FontFinder] Custom category "${category}": found ${categoryFonts.length} of ${fontFamilies.length} fonts`);
         } else {
-          if (response.statusCode === 400 || response.statusCode === 403) {
-            reject(new Error(`API key error. Please check your Google Fonts API key in config.js`));
-          } else {
-            reject(new Error(`API request failed with status: ${response.statusCode}`));
-          }
+          reject(new Error(`Category "${category}" not found`));
+          return;
         }
-      });
+        
+        if (!categoryFonts || categoryFonts.length === 0) {
+          reject(new Error(`No fonts found for category "${category}"`));
+          return;
+        }
+        
+        // Sort fonts alphabetically by family name
+        categoryFonts.sort((a, b) => a.family.localeCompare(b.family));
+        
+        // Limit the number of fonts to return (optional)
+        const fonts = limit ? categoryFonts.slice(0, limit) : categoryFonts;
+        
+        console.log(`[FontFinder] Loaded ${fonts.length} fonts from "${category}" category (sorted A-Z)`);
+        resolve(fonts);
+      } catch (error) {
+        console.error("[FontFinder] Error loading font data:", error);
+        reject(new Error("Failed to load font data from JSON"));
+      }
     });
   }
 
@@ -182,18 +211,36 @@ export class FontFinder extends PanelPlugin {
     mainLayout.setContentsMargins(0, 0, 0, 0);
     container.layout = mainLayout;
     
-    // Left sidebar - font list
+    // Left sidebar - font list and controls
     const leftSide = new Ui.Widget(container);
     const leftLayout = new Ui.BoxLayout();
     leftLayout.setDirection(Ui.Direction.TopToBottom);
-    leftLayout.spacing = 0;
+    leftLayout.spacing = 8;
     leftSide.layout = leftLayout;
-    leftSide.setFixedWidth(240);
+    leftSide.setFixedWidth(280);
     
-    // Header for font list
+    // Header for font list with counter
     const fontHeader = new Ui.Label(leftSide);
     fontHeader.text = "FONTS";
-    fontHeader.setFixedHeight(40);
+    fontHeader.setFixedHeight(24);
+    fontHeader.setContentsMargins(12, 12, 12, 0);
+    
+    // Helper to update font count in header
+    const updateFontCount = (count) => {
+      fontHeader.text = `FONTS (${count})`;
+    };
+    
+    // Category dropdown
+    const categoryDropdown = new Ui.ComboBox(leftSide);
+    categoryDropdown.setFixedHeight(28);
+    categoryDropdown.setContentsMargins(12, 0, 12, 0);
+    
+    // Search box
+    const searchInput = new Ui.TextEdit(leftSide);
+    searchInput.placeholderText = "Search fonts...";
+    searchInput.setFixedHeight(28);
+    searchInput.setContentsMargins(12, 0, 12, 0);
+    searchInput.enabled = false;
     
     // Scrollable font list
     const fontScrollArea = new Ui.VerticalScrollArea(leftSide);
@@ -259,10 +306,10 @@ export class FontFinder extends PanelPlugin {
     // Typing area - single cohesive component with label and input
     const typingContainer = new Ui.Widget(rightSide);
     typingContainer.setContentsMargins(20, 0, 20, 16);
-    typingContainer.setMinimumHeight(140);
+    typingContainer.setMinimumHeight(160);
     const typingLayout = new Ui.BoxLayout();
     typingLayout.setDirection(Ui.Direction.TopToBottom);
-    typingLayout.spacing = 6;
+    typingLayout.spacing = 8;
     typingLayout.setContentsMargins(0, 0, 0, 0);
     typingContainer.layout = typingLayout;
     
@@ -270,14 +317,25 @@ export class FontFinder extends PanelPlugin {
     typingLabel.text = "Preview Text";
     typingLabel.setFixedHeight(20);
     
-    const typingArea = new Ui.TextEdit(typingContainer);
+    // Create a CalloutFrame for a bordered container
+    const textBoxFrame = new Ui.CalloutFrame(typingContainer);
+    textBoxFrame.setMinimumHeight(110);
+    const frameLayout = new Ui.BoxLayout();
+    frameLayout.setDirection(Ui.Direction.TopToBottom);
+    frameLayout.spacing = 0;
+    frameLayout.setContentsMargins(10, 10, 10, 10);
+    textBoxFrame.layout = frameLayout;
+    
+    const typingArea = new Ui.TextEdit(textBoxFrame);
     typingArea.placeholderText = "Type to preview...";
     typingArea.plainText = "Build with SNAP!";
-    typingArea.setMinimumHeight(100);
+    typingArea.setMinimumHeight(85);
     typingArea.enabled = false; // Disabled until fonts load
     
+    frameLayout.addWidget(typingArea);
+    
     typingLayout.addWidget(typingLabel);
-    typingLayout.addWidget(typingArea);
+    typingLayout.addWidget(textBoxFrame);
     typingLayout.addStretch(0);
     
     // Helper to format variant label
@@ -300,6 +358,17 @@ export class FontFinder extends PanelPlugin {
     
     // State
     let selectedVariant = null;
+    let currentCategory = this.currentCategory;
+    let categoryFonts = [];
+    let searchTimer = null;
+    // Build a master list of all unique fonts across categories for search
+    const allFontsMap = {};
+    Object.values(fontData.categories || {}).forEach(catArr => {
+      (catArr || []).forEach(font => {
+        allFontsMap[font.family] = font;
+      });
+    });
+    const allFonts = Object.values(allFontsMap);
     const fontLabels = [];
     const fontNames = [];
     const variantOptions = [];
@@ -375,8 +444,13 @@ export class FontFinder extends PanelPlugin {
           <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
           <link href="https://fonts.googleapis.com/css2?family=${googleFamilyParam}&display=block" rel="stylesheet">
           <style>
-            body {
+            html, body {
               margin: 0;
+              padding: 0;
+              height: 100%;
+              overflow-y: auto;
+            }
+            body {
               padding: 20px;
               font-family: '${fontFamily}', sans-serif;
               font-size: 32px;
@@ -387,7 +461,6 @@ export class FontFinder extends PanelPlugin {
               word-wrap: break-word;
               overflow-wrap: break-word;
               line-height: 1.5;
-              min-height: 260px;
               opacity: 0;
               animation: fadeIn 0.2s ease-in forwards;
             }
@@ -423,12 +496,156 @@ export class FontFinder extends PanelPlugin {
       }
     };
     
+    // Render font list into UI
+    const renderFontList = (fontsToRender) => {
+      fontListLayout.clear(Ui.ClearLayoutBehavior.DeleteClearedWidgets);
+      fontLabels.length = 0;
+      fontNames.length = 0;
+      this.fonts = fontsToRender || [];
+      
+      // Update font count in header
+      updateFontCount(fontsToRender ? fontsToRender.length : 0);
+      
+      if (!fontsToRender || fontsToRender.length === 0) {
+        const emptyLabel = new Ui.Label(fontListContainer);
+        emptyLabel.text = "No fonts found";
+        emptyLabel.setFixedHeight(32);
+        fontListLayout.addWidget(emptyLabel);
+        this.selectedFont = null;
+        const emptyHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <style>
+              body {
+                margin: 0;
+                padding: 0;
+                height: 300px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #f8f9fa;
+                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                color: #666;
+              }
+            </style>
+          </head>
+          <body>No fonts match your search.</body>
+          </html>
+        `;
+        previewArea.load(`data:text/html;charset=utf-8,${encodeURIComponent(emptyHtml)}`);
+        return;
+      }
+      
+      fontsToRender.forEach((font, index) => {
+        const fontItem = new Ui.ClickableLabel(fontListContainer);
+        fontItem.text = "  " + font.family;
+        fontItem.setFixedHeight(28);
+        
+        fontItem.onClick.connect(() => {
+          setSelectedFont(font, index);
+        });
+        
+        fontLabels.push(fontItem);
+        fontNames.push(font.family);
+        fontListLayout.addWidget(fontItem);
+      });
+      
+      // Add stretch at the end to push all items to the top (prevents gaps)
+      fontListLayout.addStretch(1);
+      
+      // Select the first font by default and show preview
+      setSelectedFont(fontsToRender[0], 0);
+      downloadButton.enabled = true;
+      typingArea.enabled = true;
+      variantsDropdown.enabled = true;
+      searchInput.enabled = true;
+    };
+    
+    // Apply search filter and render
+    const applySearchAndRender = () => {
+      const term = (searchInput.plainText || "").trim().toLowerCase();
+      let filtered = categoryFonts;
+      if (term) {
+        filtered = allFonts.filter(f => f.family.toLowerCase().indexOf(term) !== -1);
+      }
+      renderFontList(filtered);
+    };
+    
+    // Load category data and render
+    const loadCategory = (category) => {
+      currentCategory = category;
+      downloadButton.enabled = false;
+      typingArea.enabled = false;
+      variantsDropdown.enabled = false;
+      searchInput.enabled = false;
+      showLoadingPreview();
+      
+      this.fetchFonts(category, 0)
+        .then(fonts => {
+          categoryFonts = fonts;
+          console.log(`[FontFinder] Category "${category}" loaded ${fonts.length} fonts`);
+          applySearchAndRender();
+        })
+        .catch(error => {
+          const errorHtml = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="UTF-8">
+              <style>
+                body {
+                  margin: 0;
+                  padding: 0;
+                  height: 300px;
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  justify-content: center;
+                  background: #fee;
+                  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                }
+                .error-icon {
+                  font-size: 40px;
+                  margin-bottom: 16px;
+                }
+                .error-text {
+                  color: #c00;
+                  font-size: 16px;
+                  text-align: center;
+                  padding: 0 20px;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="error-icon">⚠️</div>
+              <div class="error-text">${error.message}</div>
+            </body>
+            </html>
+          `;
+          const errorDataUri = `data:text/html;charset=utf-8,${encodeURIComponent(errorHtml)}`;
+          previewArea.load(errorDataUri);
+          console.error("[FontFinder]", error.message);
+        });
+    };
+    
     // Helper to set selected font and refresh UI
     const setSelectedFont = (font, itemIndex) => {
       this.selectedFont = font;
-      // Update radio button selection (automatic highlighting)
+      // Update label selection by changing background
       fontLabels.forEach((item, i) => {
-        item.checked = (i === itemIndex);
+        if (i === itemIndex) {
+          // Selected item - set background
+          item.autoFillBackground = true;
+          item.backgroundRole = Ui.ColorRole.Highlight;
+          item.foregroundRole = Ui.ColorRole.HighlightedText;
+        } else {
+          // Unselected item - clear background
+          item.autoFillBackground = false;
+          item.backgroundRole = Ui.ColorRole.Window;
+          item.foregroundRole = Ui.ColorRole.WindowText;
+        }
       });
       buildVariantDropdown(font);
       updatePreview();
@@ -436,6 +653,18 @@ export class FontFinder extends PanelPlugin {
     
     // Store panel reference
     this.panelWidget = container;
+    
+    // Populate category dropdown with custom categories
+    const categoryOrder = ['all', 'gaming', 'fantasy', 'branded', 'fun', 'elegant', 'retro', 'handwriting', 'modern', 'bold', 'futuristic'];
+    
+    categoryOrder.forEach(catKey => {
+      const displayName = CATEGORY_LABELS[catKey] || catKey;
+      categoryDropdown.addItem(displayName);
+    });
+    
+    const defaultCategory = "all";
+    const defaultDisplayName = CATEGORY_LABELS[defaultCategory] || defaultCategory;
+    categoryDropdown.currentText = defaultDisplayName;
     
     // Download button handler
     downloadButton.onClick.connect(() => {
@@ -452,11 +681,9 @@ export class FontFinder extends PanelPlugin {
           // Re-enable immediately so user can download another font
           downloadButton.enabled = true;
           downloadButton.text = "✓ Downloaded";
-          console.log("[FontFinder] Download complete, will reset button in 0.8s");
           
           // Smoothly transition back to default state
           const resetTimer = setTimeout(() => {
-            console.log("[FontFinder] Resetting button text to 'Download Font'");
             downloadButton.text = "Download Font";
           }, 800);
           
@@ -484,81 +711,8 @@ export class FontFinder extends PanelPlugin {
     // Show loading state initially
     showLoadingPreview();
     
-    // Fetch fonts asynchronously
-    this.fetchFonts()
-      .then(fonts => {
-        this.fonts = fonts;
-        
-        fontListLayout.clear(Ui.ClearLayoutBehavior.DeleteClearedWidgets);
-        fontLabels.length = 0;
-        fontNames.length = 0;
-        
-        fonts.forEach((font, index) => {
-          // Create a radio button styled as a list item (no checkbox visible, just highlighting)
-          const fontItem = new Ui.RadioButton(fontListContainer);
-          fontItem.text = "  " + font.family; // Padding for clean look
-          fontItem.setFixedHeight(32);
-          
-          fontItem.onClick.connect(() => {
-            setSelectedFont(font, index);
-          });
-          
-          fontLabels.push(fontItem);
-          fontNames.push(font.family);
-          fontListLayout.addWidget(fontItem);
-        });
-        
-        // Select the first font by default and show preview
-        if (fonts.length > 0) {
-          setSelectedFont(fonts[0], 0);
-          // Now update preview with actual font
-          updatePreview();
-          // Enable all controls now that fonts are loaded
-          downloadButton.enabled = true;
-          typingArea.enabled = true;
-          variantsDropdown.enabled = true;
-        }
-      })
-      .catch(error => {
-        const errorHtml = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="UTF-8">
-            <style>
-              body {
-                margin: 0;
-                padding: 0;
-                height: 300px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                background: #fee;
-                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-              }
-              .error-icon {
-                font-size: 40px;
-                margin-bottom: 16px;
-              }
-              .error-text {
-                color: #c00;
-                font-size: 16px;
-                text-align: center;
-                padding: 0 20px;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="error-icon">⚠️</div>
-            <div class="error-text">${error.message}</div>
-          </body>
-          </html>
-        `;
-        const errorDataUri = `data:text/html;charset=utf-8,${encodeURIComponent(errorHtml)}`;
-        previewArea.load(errorDataUri);
-        console.error("[FontFinder]", error.message);
-      });
+    // Fetch fonts for default category
+    loadCategory(defaultCategory);
     
     // Handle variants dropdown change
     variantsDropdown.onCurrentTextChange.connect((txt) => {
@@ -580,8 +734,30 @@ export class FontFinder extends PanelPlugin {
       }, 300); // 300ms debounce
     });
     
+    // Handle search input
+    searchInput.onTextChange.connect(() => {
+      if (searchTimer) {
+        clearTimeout(searchTimer);
+      }
+      searchTimer = setTimeout(() => {
+        applySearchAndRender();
+      }, 200);
+    });
+    
+    // Handle category change
+    categoryDropdown.onCurrentTextChange.connect((displayName) => {
+      if (displayName) {
+        // Convert display name back to category key
+        const categoryKey = Object.keys(CATEGORY_LABELS).find(key => CATEGORY_LABELS[key] === displayName) || displayName;
+        searchInput.plainText = "";
+        loadCategory(categoryKey);
+      }
+    });
+    
     // Assemble UI
     leftLayout.addWidget(fontHeader);
+    leftLayout.addWidget(categoryDropdown);
+    leftLayout.addWidget(searchInput);
     leftLayout.addWidget(fontScrollArea);
     
     rightLayout.addWidget(topBar);
