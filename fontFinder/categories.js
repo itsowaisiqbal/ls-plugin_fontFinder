@@ -327,15 +327,15 @@ export const CUSTOM_CATEGORIES = {
 
 // Display names for categories (user-friendly labels)
 export const CATEGORY_LABELS = {
-  all: "All Fonts",
-  gaming: "Gaming & Action",
-  fantasy: "Fantasy & Medieval",
-  branded: "Branded & Professional",
-  fun: "Fun & Playful",
-  elegant: "Elegant & Luxury",
-  retro: "Retro & Vintage",
-  handwriting: "Handwriting & Script",
-  modern: "Modern & Minimal",
-  bold: "Bold & Impact",
-  futuristic: "Futuristic & Tech"
+  all: "🌐 All Fonts",
+  gaming: "🎮 Gaming & Action",
+  fantasy: "🧙 Fantasy & Medieval",
+  branded: "💼 Branded & Professional",
+  fun: "🎨 Fun & Playful",
+  elegant: "✨ Elegant & Luxury",
+  retro: "📻 Retro & Vintage",
+  handwriting: "✍️ Handwriting & Script",
+  modern: "🔷 Modern & Minimal",
+  bold: "💪 Bold & Impact",
+  futuristic: "🚀 Futuristic & Tech"
 };

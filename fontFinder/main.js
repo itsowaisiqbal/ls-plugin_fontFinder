@@ -7,12 +7,6 @@
  */
 
 import PanelPlugin from "LensStudio:PanelPlugin";
-import * as Subprocess from "LensStudio:Subprocess";
-import * as RemoteServiceModule from "LensStudio:RemoteServiceModule";
-import * as AssetLibrary from "LensStudio:AssetLibrary";
-import * as App from "LensStudio:App";
-import * as Serialization from "LensStudio:Serialization";
-import * as Shell from "LensStudio:Shell";
 import * as Ui from "LensStudio:Ui";
 import * as Network from "LensStudio:Network";
 import * as FileSystem from "LensStudio:FileSystem";
@@ -119,7 +113,7 @@ export class FontFinder extends PanelPlugin {
             }
             
             if (fontAsset && fontAsset.name) {
-              console.log(`[FontFinder] ✓ Downloaded: ${fontFamily} ${variant} → Assets/${fontFamilyFolder}/${fontAsset.name}`);
+
               resolve({ 
                 fontAsset, 
                 folder: fontFamilyFolder,
@@ -173,7 +167,6 @@ export class FontFinder extends PanelPlugin {
             .map(familyName => allFontsMap[familyName])
             .filter(font => font !== undefined);
             
-          console.log(`[FontFinder] Custom category "${category}": found ${categoryFonts.length} of ${fontFamilies.length} fonts`);
         } else {
           reject(new Error(`Category "${category}" not found`));
           return;
@@ -190,7 +183,6 @@ export class FontFinder extends PanelPlugin {
         // Limit the number of fonts to return (optional)
         const fonts = limit ? categoryFonts.slice(0, limit) : categoryFonts;
         
-        console.log(`[FontFinder] Loaded ${fonts.length} fonts from "${category}" category (sorted A-Z)`);
         resolve(fonts);
       } catch (error) {
         console.error("[FontFinder] Error loading font data:", error);
@@ -201,142 +193,146 @@ export class FontFinder extends PanelPlugin {
 
   
   createWidget(parentWidget) {
-    // Modern, clean UI with proper styling
-    const container = new Ui.Widget(parentWidget);
+    // Outer container with scroll area for vertical overflow protection
+    const outerContainer = new Ui.Widget(parentWidget);
+    const outerLayout = new Ui.BoxLayout();
+    outerLayout.setDirection(Ui.Direction.TopToBottom);
+    outerLayout.spacing = 0;
+    outerLayout.setContentsMargins(0, 0, 0, 0);
+    outerContainer.layout = outerLayout;
     
-    // Main layout with better spacing
+    // Scroll area to handle small vertical spaces
+    const scrollArea = new Ui.VerticalScrollArea(outerContainer);
+    outerLayout.addWidget(scrollArea);
+    
+    // Inner container with all content
+    const container = new Ui.Widget(scrollArea);
+    scrollArea.setWidget(container);
+    
+    // Main vertical layout - fully responsive
     const mainLayout = new Ui.BoxLayout();
-    mainLayout.setDirection(Ui.Direction.LeftToRight);
-    mainLayout.spacing = 0;
-    mainLayout.setContentsMargins(0, 0, 0, 0);
+    mainLayout.setDirection(Ui.Direction.TopToBottom);
+    mainLayout.spacing = 6;
+    mainLayout.setContentsMargins(10, 10, 10, 10);
     container.layout = mainLayout;
     
-    // Left sidebar - font list and controls
-    const leftSide = new Ui.Widget(container);
-    const leftLayout = new Ui.BoxLayout();
-    leftLayout.setDirection(Ui.Direction.TopToBottom);
-    leftLayout.spacing = 8;
-    leftSide.layout = leftLayout;
-    leftSide.setFixedWidth(280);
-    
     // Header for font list with counter
-    const fontHeader = new Ui.Label(leftSide);
-    fontHeader.text = "FONTS";
-    fontHeader.setFixedHeight(24);
-    fontHeader.setContentsMargins(12, 12, 12, 0);
+    const fontHeader = new Ui.Label(container);
+    fontHeader.text = "📚 FONTS";
+    fontHeader.setFixedHeight(18);
     
     // Helper to update font count in header
     const updateFontCount = (count) => {
-      fontHeader.text = `FONTS (${count})`;
+      fontHeader.text = `📚 FONTS (${count})`;
     };
     
     // Category dropdown
-    const categoryDropdown = new Ui.ComboBox(leftSide);
+    const categoryDropdown = new Ui.ComboBox(container);
     categoryDropdown.setFixedHeight(28);
-    categoryDropdown.setContentsMargins(12, 0, 12, 0);
     
     // Search box
-    const searchInput = new Ui.TextEdit(leftSide);
+    const searchInput = new Ui.TextEdit(container);
     searchInput.placeholderText = "Search fonts...";
     searchInput.setFixedHeight(28);
-    searchInput.setContentsMargins(12, 0, 12, 0);
     searchInput.enabled = false;
     
-    // Scrollable font list
-    const fontScrollArea = new Ui.VerticalScrollArea(leftSide);
+    // Surprise Me button
+    const surpriseButton = new Ui.PushButton(container);
+    surpriseButton.text = "✨ Surprise Me";
+    surpriseButton.setFixedHeight(30);
+    surpriseButton.enabled = false;
+    
+    // Scrollable font list - moderate size for browsing
+    const fontScrollArea = new Ui.VerticalScrollArea(container);
+    fontScrollArea.setMinimumHeight(100);
     const fontListContainer = new Ui.Widget(fontScrollArea);
     const fontListLayout = new Ui.BoxLayout();
     fontListLayout.setDirection(Ui.Direction.TopToBottom);
     fontListLayout.spacing = 0;
     fontListContainer.layout = fontListLayout;
     fontScrollArea.setWidget(fontListContainer);
+
+    // Selected font label - prominent display of current font
+    const brandingLabel = new Ui.Label(container);
+    brandingLabel.text = "Loading...";
+    brandingLabel.setFixedHeight(22);
+    brandingLabel.wordWrap = true;
     
-    // Right side - preview and controls
-    const rightSide = new Ui.Widget(container);
-    const rightLayout = new Ui.BoxLayout();
-    rightLayout.setDirection(Ui.Direction.TopToBottom);
-    rightLayout.spacing = 16;
-    rightSide.layout = rightLayout;
-    
-    // Top bar with branding and variant selector
-    const topBar = new Ui.Widget(rightSide);
-    const topBarLayout = new Ui.BoxLayout();
-    topBarLayout.setDirection(Ui.Direction.LeftToRight);
-    topBarLayout.spacing = 16;
-    topBarLayout.setContentsMargins(20, 16, 20, 0);
-    topBar.layout = topBarLayout;
-    
-    const brandingLabel = new Ui.Label(topBar);
-    brandingLabel.text = "fontFinder";
-    
-    // Variants dropdown in top bar
-    const variantsDropdown = new Ui.ComboBox(topBar);
-    variantsDropdown.setFixedHeight(32);
-    variantsDropdown.setFixedWidth(180);
+    // Variants dropdown
+    const variantsDropdown = new Ui.ComboBox(container);
+    variantsDropdown.setFixedHeight(30);
     variantsDropdown.enabled = false; // Disabled until fonts load
     
     // Download button
-    const downloadButton = new Ui.PushButton(topBar);
-    downloadButton.text = "Download Font";
-    downloadButton.setFixedHeight(32);
-    downloadButton.setFixedWidth(140);
+    const downloadButton = new Ui.PushButton(container);
+    downloadButton.text = "⬇️ Download Font";
+    downloadButton.setFixedHeight(30);
     downloadButton.enabled = false; // Disabled until fonts load
     
-    topBarLayout.addWidget(brandingLabel);
-    topBarLayout.addStretch(1);
-    topBarLayout.addWidget(variantsDropdown);
-    topBarLayout.addWidget(downloadButton);
+    // Framed preview area - larger for better font visibility
+    const previewFrame = new Ui.CalloutFrame(container);
+    previewFrame.setMinimumHeight(160);
+    const previewFrameLayout = new Ui.BoxLayout();
+    previewFrameLayout.setDirection(Ui.Direction.TopToBottom);
+    previewFrameLayout.setContentsMargins(10, 10, 10, 10);
+    previewFrameLayout.spacing = 4;
+    previewFrame.layout = previewFrameLayout;
+
+    const previewArea = new Ui.WebEngineView(previewFrame);
+    previewArea.setMinimumHeight(140);
+    const previewSpinner = new Ui.ProgressIndicator(previewFrame);
+    previewSpinner.setFixedHeight(14);
+    previewSpinner.visible = false;
+
+    previewFrameLayout.addWidget(previewArea);
+    previewFrameLayout.addWidget(previewSpinner);
     
-    // Preview area - larger, cleaner
-    const previewContainer = new Ui.Widget(rightSide);
-    previewContainer.setContentsMargins(20, 0, 20, 0);
-    const previewLayout = new Ui.BoxLayout();
-    previewLayout.setDirection(Ui.Direction.TopToBottom);
-    previewLayout.spacing = 8;
-    previewContainer.layout = previewLayout;
+    // Typing header with character count
+    const typingHeaderWidget = new Ui.Widget(container);
+    const typingHeaderLayout = new Ui.BoxLayout();
+    typingHeaderLayout.setDirection(Ui.Direction.LeftToRight);
+    typingHeaderLayout.setContentsMargins(0, 0, 0, 0);
+    typingHeaderLayout.spacing = 8;
+    typingHeaderWidget.layout = typingHeaderLayout;
+
+    const typingLabel = new Ui.Label(typingHeaderWidget);
+    typingLabel.text = "Type to Test";
+    typingLabel.setFixedHeight(18);
+
+    const charCountLabel = new Ui.Label(typingHeaderWidget);
+    charCountLabel.text = "0 chars · 0 lines";
+    charCountLabel.setFixedHeight(18);
+
+    typingHeaderLayout.addWidget(typingLabel);
+    typingHeaderLayout.addStretch(1);
+    typingHeaderLayout.addWidget(charCountLabel);
     
-    const previewArea = new Ui.WebEngineView(previewContainer);
-    previewArea.setFixedHeight(300);
-    const previewSpinner = new Ui.ProgressIndicator(previewContainer);
-    previewSpinner.setFixedHeight(20);
-    
-    previewLayout.addWidget(previewArea);
-    previewLayout.addWidget(previewSpinner);
-    
-    // Typing area - single cohesive component with label and input
-    const typingContainer = new Ui.Widget(rightSide);
-    typingContainer.setContentsMargins(20, 0, 20, 16);
-    typingContainer.setMinimumHeight(160);
-    const typingLayout = new Ui.BoxLayout();
-    typingLayout.setDirection(Ui.Direction.TopToBottom);
-    typingLayout.spacing = 8;
-    typingLayout.setContentsMargins(0, 0, 0, 0);
-    typingContainer.layout = typingLayout;
-    
-    const typingLabel = new Ui.Label(typingContainer);
-    typingLabel.text = "Preview Text";
-    typingLabel.setFixedHeight(20);
-    
-    // Create a CalloutFrame for a bordered container
-    const textBoxFrame = new Ui.CalloutFrame(typingContainer);
-    textBoxFrame.setMinimumHeight(110);
+    // Typing area frame - small and optional for testing
+    const textBoxFrame = new Ui.CalloutFrame(container);
+    textBoxFrame.setMinimumHeight(50);
     const frameLayout = new Ui.BoxLayout();
     frameLayout.setDirection(Ui.Direction.TopToBottom);
     frameLayout.spacing = 0;
-    frameLayout.setContentsMargins(10, 10, 10, 10);
+    frameLayout.setContentsMargins(8, 8, 8, 8);
     textBoxFrame.layout = frameLayout;
     
     const typingArea = new Ui.TextEdit(textBoxFrame);
     typingArea.placeholderText = "Type to preview...";
     typingArea.plainText = "Build with SNAP!";
-    typingArea.setMinimumHeight(85);
+    typingArea.setMinimumHeight(30);
     typingArea.enabled = false; // Disabled until fonts load
     
     frameLayout.addWidget(typingArea);
+
+    // Section separator - subtle visual break between sections
+    const separator = new Ui.Widget(container);
+    separator.setFixedHeight(4);
     
-    typingLayout.addWidget(typingLabel);
-    typingLayout.addWidget(textBoxFrame);
-    typingLayout.addStretch(0);
+    // Disclaimer at the bottom
+    const disclaimer = new Ui.Label(container);
+    disclaimer.text = "ⓘ Google Fonts • Open Font License (OFL)";
+    disclaimer.wordWrap = true;
+    disclaimer.setFixedHeight(20);
     
     // Helper to format variant label
     const formatVariant = (variant) => {
@@ -375,6 +371,7 @@ export class FontFinder extends PanelPlugin {
     
     // Show loading state in preview
     const showLoadingPreview = () => {
+      previewSpinner.visible = true;
       const loadingHtml = `
         <!DOCTYPE html>
         <html>
@@ -419,12 +416,22 @@ export class FontFinder extends PanelPlugin {
       previewArea.load(`data:text/html;charset=utf-8,${encodeURIComponent(loadingHtml)}`);
     };
     
+    // Helper to keep character count visible
+    const updateCharCount = () => {
+      const text = typingArea.plainText || "";
+      const chars = text.length;
+      const lines = text ? text.split("\n").length : 0;
+      charCountLabel.text = `${chars} chars · ${lines} lines`;
+    };
+    updateCharCount();
+    
     // Optimized preview update with Google Fonts CDN
     const updatePreview = () => {
       // Don't update preview if fonts aren't loaded yet
       if (!this.selectedFont) {
         return;
       }
+      previewSpinner.visible = true;
       
       const text = typingArea.plainText || "";
       const fontFamily = this.selectedFont.family;
@@ -477,6 +484,7 @@ export class FontFinder extends PanelPlugin {
       
       const dataUri = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
       previewArea.load(dataUri);
+      previewSpinner.visible = false;
     };
     
     // Helper to clear variant buttons
@@ -512,6 +520,7 @@ export class FontFinder extends PanelPlugin {
         emptyLabel.setFixedHeight(32);
         fontListLayout.addWidget(emptyLabel);
         this.selectedFont = null;
+        previewSpinner.visible = false;
         const emptyHtml = `
           <!DOCTYPE html>
           <html>
@@ -557,10 +566,12 @@ export class FontFinder extends PanelPlugin {
       
       // Select the first font by default and show preview
       setSelectedFont(fontsToRender[0], 0);
+      
       downloadButton.enabled = true;
       typingArea.enabled = true;
       variantsDropdown.enabled = true;
       searchInput.enabled = true;
+      surpriseButton.enabled = true;
     };
     
     // Apply search filter and render
@@ -580,12 +591,12 @@ export class FontFinder extends PanelPlugin {
       typingArea.enabled = false;
       variantsDropdown.enabled = false;
       searchInput.enabled = false;
+      surpriseButton.enabled = false;
       showLoadingPreview();
       
       this.fetchFonts(category, 0)
         .then(fonts => {
           categoryFonts = fonts;
-          console.log(`[FontFinder] Category "${category}" loaded ${fonts.length} fonts`);
           applySearchAndRender();
         })
         .catch(error => {
@@ -626,6 +637,7 @@ export class FontFinder extends PanelPlugin {
           `;
           const errorDataUri = `data:text/html;charset=utf-8,${encodeURIComponent(errorHtml)}`;
           previewArea.load(errorDataUri);
+          previewSpinner.visible = false;
           console.error("[FontFinder]", error.message);
         });
     };
@@ -633,6 +645,10 @@ export class FontFinder extends PanelPlugin {
     // Helper to set selected font and refresh UI
     const setSelectedFont = (font, itemIndex) => {
       this.selectedFont = font;
+      
+      // Update branding label to show selected font name
+      brandingLabel.text = font.family;
+      
       // Update label selection by changing background
       fontLabels.forEach((item, i) => {
         if (i === itemIndex) {
@@ -652,7 +668,7 @@ export class FontFinder extends PanelPlugin {
     };
     
     // Store panel reference
-    this.panelWidget = container;
+    this.panelWidget = outerContainer;
     
     // Populate category dropdown with custom categories
     const categoryOrder = ['all', 'gaming', 'fantasy', 'branded', 'fun', 'elegant', 'retro', 'handwriting', 'modern', 'bold', 'futuristic'];
@@ -673,7 +689,7 @@ export class FontFinder extends PanelPlugin {
       }
       
       // Disable button during download
-      downloadButton.text = "Downloading...";
+      downloadButton.text = "⏳ Downloading...";
       downloadButton.enabled = false;
       
       this.downloadAndImportFont(this.selectedFont, selectedVariant)
@@ -684,7 +700,7 @@ export class FontFinder extends PanelPlugin {
           
           // Smoothly transition back to default state
           const resetTimer = setTimeout(() => {
-            downloadButton.text = "Download Font";
+            downloadButton.text = "⬇️ Download Font";
           }, 800);
           
           // Store timer reference to prevent it from being garbage collected
@@ -699,7 +715,7 @@ export class FontFinder extends PanelPlugin {
           
           // Smoothly transition back to default state
           const resetTimer = setTimeout(() => {
-            downloadButton.text = "Download Font";
+            downloadButton.text = "⬇️ Download Font";
           }, 1200);
           
           // Store timer reference
@@ -730,6 +746,7 @@ export class FontFinder extends PanelPlugin {
         clearTimeout(this.updateTimeout);
       }
       this.updateTimeout = setTimeout(() => {
+        updateCharCount();
         updatePreview();
       }, 300); // 300ms debounce
     });
@@ -754,20 +771,50 @@ export class FontFinder extends PanelPlugin {
       }
     });
     
-    // Assemble UI
-    leftLayout.addWidget(fontHeader);
-    leftLayout.addWidget(categoryDropdown);
-    leftLayout.addWidget(searchInput);
-    leftLayout.addWidget(fontScrollArea);
+    // Handle Surprise Me button - picks from current category/search results
+    surpriseButton.onClick.connect(() => {
+      // Pick from currently displayed fonts (respects category and search filter)
+      if (!this.fonts || this.fonts.length === 0) {
+        return;
+      }
+      
+      // Pick a random font from the current category/search results
+      const randomIndex = Math.floor(Math.random() * this.fonts.length);
+      const randomFont = this.fonts[randomIndex];
+      
+      // Select the random font (it's guaranteed to be in the current view)
+      setSelectedFont(randomFont, randomIndex);
+    });
     
-    rightLayout.addWidget(topBar);
-    rightLayout.addWidget(previewContainer);
-    rightLayout.addWidget(typingContainer);
+    // Assemble all widgets in vertical stack
+    // Logical workflow: Pick font → Configure → Preview → Test
     
-    mainLayout.addWidget(leftSide);
-    mainLayout.addWidget(rightSide);
+    // Section 1: Font Discovery & Selection
+    mainLayout.addWidget(surpriseButton);
+    mainLayout.addWidget(categoryDropdown);
+    mainLayout.addWidget(fontHeader);
+    mainLayout.addWidget(searchInput);
+    mainLayout.addWidget(fontScrollArea);
     
-    return container;
+    // Visual separator
+    mainLayout.addWidget(separator);
+    
+    // Section 2: Font Controls (name, variant, download)
+    mainLayout.addWidget(brandingLabel);
+    mainLayout.addWidget(variantsDropdown);
+    mainLayout.addWidget(downloadButton);
+    
+    // Section 3: Preview (larger)
+    mainLayout.addWidget(previewFrame);
+    
+    // Section 4: Typing Test (smaller, optional)
+    mainLayout.addWidget(typingHeaderWidget);
+    mainLayout.addWidget(textBoxFrame);
+    
+    // Footer
+    mainLayout.addWidget(disclaimer);
+    
+    return outerContainer;
   }
   
   
