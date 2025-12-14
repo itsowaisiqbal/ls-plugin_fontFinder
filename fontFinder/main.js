@@ -226,12 +226,14 @@ export class FontFinder extends PanelPlugin {
     const variantsDropdown = new Ui.ComboBox(topBar);
     variantsDropdown.setFixedHeight(32);
     variantsDropdown.setFixedWidth(180);
+    variantsDropdown.enabled = false; // Disabled until fonts load
     
     // Download button
     const downloadButton = new Ui.PushButton(topBar);
     downloadButton.text = "Download Font";
     downloadButton.setFixedHeight(32);
     downloadButton.setFixedWidth(140);
+    downloadButton.enabled = false; // Disabled until fonts load
     
     topBarLayout.addWidget(brandingLabel);
     topBarLayout.addStretch(1);
@@ -270,8 +272,9 @@ export class FontFinder extends PanelPlugin {
     
     const typingArea = new Ui.TextEdit(typingContainer);
     typingArea.placeholderText = "Type to preview...";
-    typingArea.plainText = "";
+    typingArea.plainText = "Build with SNAP!";
     typingArea.setMinimumHeight(100);
+    typingArea.enabled = false; // Disabled until fonts load
     
     typingLayout.addWidget(typingLabel);
     typingLayout.addWidget(typingArea);
@@ -301,10 +304,61 @@ export class FontFinder extends PanelPlugin {
     const fontNames = [];
     const variantOptions = [];
     
+    // Show loading state in preview
+    const showLoadingPreview = () => {
+      const loadingHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            body {
+              margin: 0;
+              padding: 0;
+              height: 300px;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              background: #f8f9fa;
+              font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            }
+            .spinner {
+              width: 40px;
+              height: 40px;
+              border: 4px solid #e0e0e0;
+              border-top-color: #333;
+              border-radius: 50%;
+              animation: spin 0.8s linear infinite;
+            }
+            @keyframes spin {
+              to { transform: rotate(360deg); }
+            }
+            .text {
+              margin-top: 16px;
+              color: #666;
+              font-size: 14px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="spinner"></div>
+          <div class="text">Loading fonts...</div>
+        </body>
+        </html>
+      `;
+      previewArea.load(`data:text/html;charset=utf-8,${encodeURIComponent(loadingHtml)}`);
+    };
+    
     // Optimized preview update with Google Fonts CDN
     const updatePreview = () => {
+      // Don't update preview if fonts aren't loaded yet
+      if (!this.selectedFont) {
+        return;
+      }
+      
       const text = typingArea.plainText || "";
-      const fontFamily = this.selectedFont ? this.selectedFont.family : "Arial";
+      const fontFamily = this.selectedFont.family;
       const variant = selectedVariant || "regular";
       const { weight, isItalic } = parseVariant(variant);
       const ital = isItalic ? 1 : 0;
@@ -427,8 +481,8 @@ export class FontFinder extends PanelPlugin {
         });
     });
     
-    // Initial preview (before fonts load)
-    updatePreview();
+    // Show loading state initially
+    showLoadingPreview();
     
     // Fetch fonts asynchronously
     this.fetchFonts()
@@ -454,9 +508,15 @@ export class FontFinder extends PanelPlugin {
           fontListLayout.addWidget(fontItem);
         });
         
-        // Select the first font by default
+        // Select the first font by default and show preview
         if (fonts.length > 0) {
           setSelectedFont(fonts[0], 0);
+          // Now update preview with actual font
+          updatePreview();
+          // Enable all controls now that fonts are loaded
+          downloadButton.enabled = true;
+          typingArea.enabled = true;
+          variantsDropdown.enabled = true;
         }
       })
       .catch(error => {
@@ -468,16 +528,30 @@ export class FontFinder extends PanelPlugin {
             <style>
               body {
                 margin: 0;
-                padding: 20px;
-                font-family: Arial, sans-serif;
-                font-size: 16px;
+                padding: 0;
+                height: 300px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
                 background: #fee;
+                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+              }
+              .error-icon {
+                font-size: 40px;
+                margin-bottom: 16px;
+              }
+              .error-text {
                 color: #c00;
+                font-size: 16px;
+                text-align: center;
+                padding: 0 20px;
               }
             </style>
           </head>
           <body>
-            Error: ${error.message}
+            <div class="error-icon">⚠️</div>
+            <div class="error-text">${error.message}</div>
           </body>
           </html>
         `;
