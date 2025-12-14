@@ -33,6 +33,7 @@ export class FontFinder extends PanelPlugin {
     this.updateTimeout = null; // Debounce timer for preview updates
     this.panelWidget = null; // Reference to the panel widget for closing
     this.tempDirs = []; // Keep references to temp directories to prevent garbage collection
+    this.resetTimers = []; // Keep references to button reset timers
   }
   
   // Download font and import into Lens Studio
@@ -388,24 +389,41 @@ export class FontFinder extends PanelPlugin {
         return;
       }
       
+      // Disable button during download
       downloadButton.text = "Downloading...";
       downloadButton.enabled = false;
       
       this.downloadAndImportFont(this.selectedFont, selectedVariant)
         .then(() => {
+          // Re-enable immediately so user can download another font
+          downloadButton.enabled = true;
           downloadButton.text = "✓ Downloaded";
-          setTimeout(() => {
+          console.log("[FontFinder] Download complete, will reset button in 0.8s");
+          
+          // Smoothly transition back to default state
+          const resetTimer = setTimeout(() => {
+            console.log("[FontFinder] Resetting button text to 'Download Font'");
             downloadButton.text = "Download Font";
-            downloadButton.enabled = true;
-          }, 2000);
+          }, 800);
+          
+          // Store timer reference to prevent it from being garbage collected
+          if (!this.resetTimers) this.resetTimers = [];
+          this.resetTimers.push(resetTimer);
         })
         .catch((error) => {
           console.error(`[FontFinder] Error:`, error.message);
+          // Re-enable immediately
+          downloadButton.enabled = true;
           downloadButton.text = "✗ Failed";
-          setTimeout(() => {
+          
+          // Smoothly transition back to default state
+          const resetTimer = setTimeout(() => {
             downloadButton.text = "Download Font";
-            downloadButton.enabled = true;
-          }, 2000);
+          }, 1200);
+          
+          // Store timer reference
+          if (!this.resetTimers) this.resetTimers = [];
+          this.resetTimers.push(resetTimer);
         });
     });
     
@@ -508,6 +526,12 @@ export class FontFinder extends PanelPlugin {
     // Clean up timers
     if (this.updateTimeout) {
       clearTimeout(this.updateTimeout);
+    }
+    
+    // Clean up reset timers
+    if (this.resetTimers && this.resetTimers.length > 0) {
+      this.resetTimers.forEach(timer => clearTimeout(timer));
+      this.resetTimers = [];
     }
     
     // Clean up temp directories
