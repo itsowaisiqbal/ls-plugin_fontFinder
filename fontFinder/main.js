@@ -1,11 +1,3 @@
-/**
- * FontFinder - Lens Studio Plugin
- * 
- * Browse and download 1,900+ Google Fonts directly into your Lens Studio project.
- * All font data is loaded from fonts.json (no API key required).
- * Fonts are organized by category: popular, game, branded, etc.
- */
-
 import PanelPlugin from "LensStudio:PanelPlugin";
 import * as Ui from "LensStudio:Ui";
 import * as Network from "LensStudio:Network";
@@ -30,18 +22,17 @@ export class FontFinder extends PanelPlugin {
   
   constructor(pluginSystem) {
     super(pluginSystem);
-    this.fonts = []; // Store fetched fonts
-    this.categoryFonts = []; // Raw fonts for current category
-    this.selectedFont = null; // Store selected font
-    this.selectedVariant = null; // Store selected variant
-    this.updateTimeout = null; // Debounce timer for preview updates
-    this.panelWidget = null; // Reference to the panel widget for closing
-    this.tempDirs = []; // Keep references to temp directories to prevent garbage collection
-    this.resetTimers = []; // Keep references to button reset timers
+    this.fonts = [];  
+    this.categoryFonts = []; 
+    this.selectedFont = null; 
+    this.selectedVariant = null; 
+    this.updateTimeout = null; 
+    this.panelWidget = null; 
+    this.tempDirs = []; 
+    this.resetTimers = []; 
     this.currentCategory = "all";
   }
   
-  // Download font and import into Lens Studio
   downloadAndImportFont(font, variant) {
     const fontFamily = font.family;
     const fontData = this.fonts.find(f => f.family === fontFamily);
@@ -60,7 +51,6 @@ export class FontFinder extends PanelPlugin {
       Network.performHttpRequest(request, (response) => {
         if (response.statusCode === 200) {
           try {
-            // Create temp directory for font file and keep reference to prevent garbage collection
             const tempDir = FileSystem.TempDir.create();
             this.tempDirs.push(tempDir);
             
@@ -69,17 +59,14 @@ export class FontFinder extends PanelPlugin {
             const fileName = `${sanitizedName}_${variant}${fontExtension}`;
             const tempFilePath = tempDir.path.appended(new Editor.Path(fileName));
             
-            // Write font bytes to temp file
             const fontBytes = response.body.toBytes();
             FileSystem.writeFile(tempFilePath, fontBytes);
             
-            // Verify file exists
             if (!FileSystem.exists(tempFilePath)) {
               reject(new Error('Failed to write temp file'));
               return;
             }
             
-            // Import font into Lens Studio project
             const model = this.pluginSystem.findInterface(Editor.Model.IModel);
             const assetManager = model.project.assetManager;
             
@@ -87,20 +74,17 @@ export class FontFinder extends PanelPlugin {
             const fontFinderFolder = `fontFinder`;
             const fontFamilyFolder = `${fontFinderFolder}/${fontFamily}`;
             
-            // Import the font file
             const importResult = assetManager.importExternalFile(
               tempFilePath,
               fontFamilyFolder,
               Editor.Model.ResultType.Auto
             );
             
-            // Clean up temp directory
             const tempDirIndex = this.tempDirs.indexOf(tempDir);
             if (tempDirIndex > -1) {
               this.tempDirs.splice(tempDirIndex, 1);
             }
             
-            // Get the imported asset
             let fontAsset = null;
             if (importResult) {
               if (importResult.primary) {
@@ -135,14 +119,12 @@ export class FontFinder extends PanelPlugin {
     });
   }
 
-  // Load fonts from JSON file using custom categories
   async fetchFonts(category = 'all', limit = 0) {
     return new Promise((resolve, reject) => {
       try {
         let categoryFonts = [];
         
         if (category === 'all') {
-          // Combine all fonts from all categories, removing duplicates
           const allFontsMap = {};
           Object.values(fontData.categories || {}).forEach(catArr => {
             (catArr || []).forEach(font => {
@@ -151,10 +133,8 @@ export class FontFinder extends PanelPlugin {
           });
           categoryFonts = Object.values(allFontsMap);
         } else if (CUSTOM_CATEGORIES[category]) {
-          // Use custom category mapping
           const fontFamilies = CUSTOM_CATEGORIES[category];
           
-          // Build a map of all available fonts for quick lookup
           const allFontsMap = {};
           Object.values(fontData.categories || {}).forEach(catArr => {
             (catArr || []).forEach(font => {
@@ -162,7 +142,6 @@ export class FontFinder extends PanelPlugin {
             });
           });
           
-          // Filter fonts based on custom category list
           categoryFonts = fontFamilies
             .map(familyName => allFontsMap[familyName])
             .filter(font => font !== undefined);
@@ -177,10 +156,8 @@ export class FontFinder extends PanelPlugin {
           return;
         }
         
-        // Sort fonts alphabetically by family name
         categoryFonts.sort((a, b) => a.family.localeCompare(b.family));
         
-        // Limit the number of fonts to return (optional)
         const fonts = limit ? categoryFonts.slice(0, limit) : categoryFonts;
         
         resolve(fonts);
@@ -193,7 +170,6 @@ export class FontFinder extends PanelPlugin {
 
   
   createWidget(parentWidget) {
-    // Outer container with scroll area for vertical overflow protection
     const outerContainer = new Ui.Widget(parentWidget);
     const outerLayout = new Ui.BoxLayout();
     outerLayout.setDirection(Ui.Direction.TopToBottom);
@@ -201,48 +177,39 @@ export class FontFinder extends PanelPlugin {
     outerLayout.setContentsMargins(0, 0, 0, 0);
     outerContainer.layout = outerLayout;
     
-    // Scroll area to handle small vertical spaces
     const scrollArea = new Ui.VerticalScrollArea(outerContainer);
     outerLayout.addWidget(scrollArea);
     
-    // Inner container with all content
     const container = new Ui.Widget(scrollArea);
     scrollArea.setWidget(container);
     
-    // Main vertical layout - fully responsive
     const mainLayout = new Ui.BoxLayout();
     mainLayout.setDirection(Ui.Direction.TopToBottom);
     mainLayout.spacing = 6;
     mainLayout.setContentsMargins(10, 10, 10, 10);
     container.layout = mainLayout;
     
-    // Header for font list with counter
     const fontHeader = new Ui.Label(container);
     fontHeader.text = "📚 FONTS";
     fontHeader.setFixedHeight(18);
     
-    // Helper to update font count in header
     const updateFontCount = (count) => {
       fontHeader.text = `📚 FONTS (${count})`;
     };
     
-    // Category dropdown
     const categoryDropdown = new Ui.ComboBox(container);
     categoryDropdown.setFixedHeight(28);
     
-    // Search box
     const searchInput = new Ui.TextEdit(container);
     searchInput.placeholderText = "Search fonts...";
     searchInput.setFixedHeight(28);
     searchInput.enabled = false;
     
-    // Surprise Me button
     const surpriseButton = new Ui.PushButton(container);
     surpriseButton.text = "✨ Surprise Me";
     surpriseButton.setFixedHeight(30);
     surpriseButton.enabled = false;
     
-    // Scrollable font list - moderate size for browsing
     const fontScrollArea = new Ui.VerticalScrollArea(container);
     fontScrollArea.setMinimumHeight(100);
     const fontListContainer = new Ui.Widget(fontScrollArea);
@@ -252,24 +219,20 @@ export class FontFinder extends PanelPlugin {
     fontListContainer.layout = fontListLayout;
     fontScrollArea.setWidget(fontListContainer);
 
-    // Selected font label - prominent display of current font
     const brandingLabel = new Ui.Label(container);
     brandingLabel.text = "Loading...";
     brandingLabel.setFixedHeight(22);
     brandingLabel.wordWrap = true;
-    
-    // Variants dropdown
+
     const variantsDropdown = new Ui.ComboBox(container);
     variantsDropdown.setFixedHeight(30);
-    variantsDropdown.enabled = false; // Disabled until fonts load
+    variantsDropdown.enabled = false; 
     
-    // Download button
     const downloadButton = new Ui.PushButton(container);
     downloadButton.text = "⬇️ Download Font";
     downloadButton.setFixedHeight(30);
-    downloadButton.enabled = false; // Disabled until fonts load
+    downloadButton.enabled = false; 
     
-    // Framed preview area - larger for better font visibility
     const previewFrame = new Ui.CalloutFrame(container);
     previewFrame.setMinimumHeight(160);
     const previewFrameLayout = new Ui.BoxLayout();
@@ -287,7 +250,6 @@ export class FontFinder extends PanelPlugin {
     previewFrameLayout.addWidget(previewArea);
     previewFrameLayout.addWidget(previewSpinner);
     
-    // Typing header with character count
     const typingHeaderWidget = new Ui.Widget(container);
     const typingHeaderLayout = new Ui.BoxLayout();
     typingHeaderLayout.setDirection(Ui.Direction.LeftToRight);
@@ -296,7 +258,7 @@ export class FontFinder extends PanelPlugin {
     typingHeaderWidget.layout = typingHeaderLayout;
 
     const typingLabel = new Ui.Label(typingHeaderWidget);
-    typingLabel.text = "Type to Test";
+    typingLabel.text = "Type to Preview";
     typingLabel.setFixedHeight(18);
 
     const charCountLabel = new Ui.Label(typingHeaderWidget);
@@ -307,7 +269,6 @@ export class FontFinder extends PanelPlugin {
     typingHeaderLayout.addStretch(1);
     typingHeaderLayout.addWidget(charCountLabel);
     
-    // Typing area frame - small and optional for testing
     const textBoxFrame = new Ui.CalloutFrame(container);
     textBoxFrame.setMinimumHeight(50);
     const frameLayout = new Ui.BoxLayout();
@@ -317,24 +278,21 @@ export class FontFinder extends PanelPlugin {
     textBoxFrame.layout = frameLayout;
     
     const typingArea = new Ui.TextEdit(textBoxFrame);
-    typingArea.placeholderText = "Type to preview...";
+    typingArea.placeholderText = "Type here...";
     typingArea.plainText = "Build with SNAP!";
     typingArea.setMinimumHeight(30);
-    typingArea.enabled = false; // Disabled until fonts load
+    typingArea.enabled = false; 
     
     frameLayout.addWidget(typingArea);
 
-    // Section separator - subtle visual break between sections
     const separator = new Ui.Widget(container);
     separator.setFixedHeight(4);
     
-    // Disclaimer at the bottom
     const disclaimer = new Ui.Label(container);
     disclaimer.text = "ⓘ Google Fonts • Open Font License (OFL)";
     disclaimer.wordWrap = true;
     disclaimer.setFixedHeight(20);
     
-    // Helper to format variant label
     const formatVariant = (variant) => {
       if (!variant) return "Regular";
       if (variant === "regular") return "Regular";
@@ -344,7 +302,6 @@ export class FontFinder extends PanelPlugin {
       return `${weight || "400"}${isItalic ? " Italic" : ""}`;
     };
     
-    // Helper to parse weight/style from variant
     const parseVariant = (variant) => {
       const isItalic = variant.indexOf("italic") !== -1;
       const digits = variant.match(/\d+/);
@@ -352,12 +309,10 @@ export class FontFinder extends PanelPlugin {
       return { weight, isItalic };
     };
     
-    // State
     let selectedVariant = null;
     let currentCategory = this.currentCategory;
     let categoryFonts = [];
     let searchTimer = null;
-    // Build a master list of all unique fonts across categories for search
     const allFontsMap = {};
     Object.values(fontData.categories || {}).forEach(catArr => {
       (catArr || []).forEach(font => {
@@ -369,7 +324,6 @@ export class FontFinder extends PanelPlugin {
     const fontNames = [];
     const variantOptions = [];
     
-    // Show loading state in preview
     const showLoadingPreview = () => {
       previewSpinner.visible = true;
       const loadingHtml = `
@@ -416,7 +370,6 @@ export class FontFinder extends PanelPlugin {
       previewArea.load(`data:text/html;charset=utf-8,${encodeURIComponent(loadingHtml)}`);
     };
     
-    // Helper to keep character count visible
     const updateCharCount = () => {
       const text = typingArea.plainText || "";
       const chars = text.length;
@@ -425,9 +378,7 @@ export class FontFinder extends PanelPlugin {
     };
     updateCharCount();
     
-    // Optimized preview update with Google Fonts CDN
     const updatePreview = () => {
-      // Don't update preview if fonts aren't loaded yet
       if (!this.selectedFont) {
         return;
       }
@@ -439,7 +390,6 @@ export class FontFinder extends PanelPlugin {
       const { weight, isItalic } = parseVariant(variant);
       const ital = isItalic ? 1 : 0;
       
-      // Use optimized Google Fonts URL with display=block to prevent layout shift
       const googleFamilyParam = `${encodeURIComponent(fontFamily)}:ital,wght@${ital},${weight}`;
       
       const html = `
@@ -487,7 +437,6 @@ export class FontFinder extends PanelPlugin {
       previewSpinner.visible = false;
     };
     
-    // Helper to clear variant buttons
     const buildVariantDropdown = (font) => {
       variantsDropdown.clear();
       variantOptions.length = 0;
@@ -497,21 +446,17 @@ export class FontFinder extends PanelPlugin {
         variantOptions[idx] = variant;
       });
       selectedVariant = variants.length ? variants[0] : "regular";
-      // Track selected index manually since currentIndex might not be available
       if (variants.length > 0) {
-        // Select first item by setting it as current text
         variantsDropdown.currentText = formatVariant(variants[0]);
       }
     };
     
-    // Render font list into UI
     const renderFontList = (fontsToRender) => {
       fontListLayout.clear(Ui.ClearLayoutBehavior.DeleteClearedWidgets);
       fontLabels.length = 0;
       fontNames.length = 0;
       this.fonts = fontsToRender || [];
       
-      // Update font count in header
       updateFontCount(fontsToRender ? fontsToRender.length : 0);
       
       if (!fontsToRender || fontsToRender.length === 0) {
@@ -561,10 +506,8 @@ export class FontFinder extends PanelPlugin {
         fontListLayout.addWidget(fontItem);
       });
       
-      // Add stretch at the end to push all items to the top (prevents gaps)
       fontListLayout.addStretch(1);
       
-      // Select the first font by default and show preview
       setSelectedFont(fontsToRender[0], 0);
       
       downloadButton.enabled = true;
@@ -574,7 +517,6 @@ export class FontFinder extends PanelPlugin {
       surpriseButton.enabled = true;
     };
     
-    // Apply search filter and render
     const applySearchAndRender = () => {
       const term = (searchInput.plainText || "").trim().toLowerCase();
       let filtered = categoryFonts;
@@ -584,7 +526,6 @@ export class FontFinder extends PanelPlugin {
       renderFontList(filtered);
     };
     
-    // Load category data and render
     const loadCategory = (category) => {
       currentCategory = category;
       downloadButton.enabled = false;
@@ -642,22 +583,17 @@ export class FontFinder extends PanelPlugin {
         });
     };
     
-    // Helper to set selected font and refresh UI
     const setSelectedFont = (font, itemIndex) => {
       this.selectedFont = font;
       
-      // Update branding label to show selected font name
       brandingLabel.text = font.family;
       
-      // Update label selection by changing background
       fontLabels.forEach((item, i) => {
         if (i === itemIndex) {
-          // Selected item - set background
           item.autoFillBackground = true;
           item.backgroundRole = Ui.ColorRole.Highlight;
           item.foregroundRole = Ui.ColorRole.HighlightedText;
         } else {
-          // Unselected item - clear background
           item.autoFillBackground = false;
           item.backgroundRole = Ui.ColorRole.Window;
           item.foregroundRole = Ui.ColorRole.WindowText;
@@ -667,10 +603,8 @@ export class FontFinder extends PanelPlugin {
       updatePreview();
     };
     
-    // Store panel reference
     this.panelWidget = outerContainer;
     
-    // Populate category dropdown with custom categories
     const categoryOrder = ['all', 'gaming', 'fantasy', 'branded', 'fun', 'elegant', 'retro', 'handwriting', 'modern', 'bold', 'futuristic'];
     
     categoryOrder.forEach(catKey => {
@@ -682,55 +616,44 @@ export class FontFinder extends PanelPlugin {
     const defaultDisplayName = CATEGORY_LABELS[defaultCategory] || defaultCategory;
     categoryDropdown.currentText = defaultDisplayName;
     
-    // Download button handler
     downloadButton.onClick.connect(() => {
       if (!this.selectedFont || !selectedVariant) {
         return;
       }
       
-      // Disable button during download
       downloadButton.text = "⏳ Downloading...";
       downloadButton.enabled = false;
       
       this.downloadAndImportFont(this.selectedFont, selectedVariant)
         .then(() => {
-          // Re-enable immediately so user can download another font
           downloadButton.enabled = true;
           downloadButton.text = "✓ Downloaded";
           
-          // Smoothly transition back to default state
           const resetTimer = setTimeout(() => {
             downloadButton.text = "⬇️ Download Font";
           }, 800);
           
-          // Store timer reference to prevent it from being garbage collected
           if (!this.resetTimers) this.resetTimers = [];
           this.resetTimers.push(resetTimer);
         })
         .catch((error) => {
           console.error(`[FontFinder] Error:`, error.message);
-          // Re-enable immediately
           downloadButton.enabled = true;
           downloadButton.text = "✗ Failed";
           
-          // Smoothly transition back to default state
           const resetTimer = setTimeout(() => {
             downloadButton.text = "⬇️ Download Font";
           }, 1200);
           
-          // Store timer reference
           if (!this.resetTimers) this.resetTimers = [];
           this.resetTimers.push(resetTimer);
         });
     });
     
-    // Show loading state initially
     showLoadingPreview();
     
-    // Fetch fonts for default category
     loadCategory(defaultCategory);
     
-    // Handle variants dropdown change
     variantsDropdown.onCurrentTextChange.connect((txt) => {
       const matchIdx = variantOptions.findIndex(v => formatVariant(v) === txt);
       if (matchIdx >= 0) {
@@ -739,19 +662,16 @@ export class FontFinder extends PanelPlugin {
       }
     });
     
-    // Connect typing area to preview (debounced for better performance)
     typingArea.onTextChange.connect(() => {
-      // Debounce updates to avoid excessive reloads while typing
       if (this.updateTimeout) {
         clearTimeout(this.updateTimeout);
       }
       this.updateTimeout = setTimeout(() => {
         updateCharCount();
         updatePreview();
-      }, 300); // 300ms debounce
+      }, 300); 
     });
     
-    // Handle search input
     searchInput.onTextChange.connect(() => {
       if (searchTimer) {
         clearTimeout(searchTimer);
@@ -761,57 +681,42 @@ export class FontFinder extends PanelPlugin {
       }, 200);
     });
     
-    // Handle category change
     categoryDropdown.onCurrentTextChange.connect((displayName) => {
       if (displayName) {
-        // Convert display name back to category key
         const categoryKey = Object.keys(CATEGORY_LABELS).find(key => CATEGORY_LABELS[key] === displayName) || displayName;
         searchInput.plainText = "";
         loadCategory(categoryKey);
       }
     });
     
-    // Handle Surprise Me button - picks from current category/search results
     surpriseButton.onClick.connect(() => {
-      // Pick from currently displayed fonts (respects category and search filter)
       if (!this.fonts || this.fonts.length === 0) {
         return;
       }
       
-      // Pick a random font from the current category/search results
       const randomIndex = Math.floor(Math.random() * this.fonts.length);
       const randomFont = this.fonts[randomIndex];
       
-      // Select the random font (it's guaranteed to be in the current view)
       setSelectedFont(randomFont, randomIndex);
     });
     
-    // Assemble all widgets in vertical stack
-    // Logical workflow: Pick font → Configure → Preview → Test
-    
-    // Section 1: Font Discovery & Selection
     mainLayout.addWidget(surpriseButton);
     mainLayout.addWidget(categoryDropdown);
     mainLayout.addWidget(fontHeader);
     mainLayout.addWidget(searchInput);
     mainLayout.addWidget(fontScrollArea);
     
-    // Visual separator
     mainLayout.addWidget(separator);
     
-    // Section 2: Font Controls (name, variant, download)
     mainLayout.addWidget(brandingLabel);
     mainLayout.addWidget(variantsDropdown);
     mainLayout.addWidget(downloadButton);
     
-    // Section 3: Preview (larger)
     mainLayout.addWidget(previewFrame);
     
-    // Section 4: Typing Test (smaller, optional)
     mainLayout.addWidget(typingHeaderWidget);
     mainLayout.addWidget(textBoxFrame);
     
-    // Footer
     mainLayout.addWidget(disclaimer);
     
     return outerContainer;
@@ -820,18 +725,15 @@ export class FontFinder extends PanelPlugin {
   
   
   deinit() {
-    // Clean up timers
     if (this.updateTimeout) {
       clearTimeout(this.updateTimeout);
     }
     
-    // Clean up reset timers
     if (this.resetTimers && this.resetTimers.length > 0) {
       this.resetTimers.forEach(timer => clearTimeout(timer));
       this.resetTimers = [];
     }
     
-    // Clean up temp directories
     if (this.tempDirs && this.tempDirs.length > 0) {
       this.tempDirs = [];
     }

@@ -1,13 +1,4 @@
-/**
- * Custom font categories for FontFinder
- * Use-case based categorization for better user experience
- * 
- * These categories help users find fonts based on their creative intent
- * rather than technical font classifications.
- */
-
 export const CUSTOM_CATEGORIES = {
-  // Gaming & Action - Bold, impactful fonts for games and dynamic content
   gaming: [
     "Press Start 2P",
     "Orbitron",
@@ -40,7 +31,6 @@ export const CUSTOM_CATEGORIES = {
     "Gugi"
   ],
 
-  // Fantasy & Medieval - Mystical, magical, and epic fonts
   fantasy: [
     "Cinzel",
     "Cinzel Decorative",
@@ -69,7 +59,6 @@ export const CUSTOM_CATEGORIES = {
     "Creepster"
   ],
 
-  // Branded & Professional - Clean, corporate, business fonts
   branded: [
     "Montserrat",
     "Poppins",
@@ -103,7 +92,6 @@ export const CUSTOM_CATEGORIES = {
     "Quicksand"
   ],
 
-  // Fun & Playful - Bubbly, casual, comic fonts
   fun: [
     "Fredoka",
     "Bubblegum Sans",
@@ -136,7 +124,6 @@ export const CUSTOM_CATEGORIES = {
     "Karantina"
   ],
 
-  // Elegant & Luxury - Sophisticated, refined, high-end fonts
   elegant: [
     "Playfair Display",
     "Cormorant",
@@ -169,7 +156,6 @@ export const CUSTOM_CATEGORIES = {
     "Yeseva One"
   ],
 
-  // Retro & Vintage - 70s, 80s, nostalgic vibes
   retro: [
     "Pacifico",
     "Monoton",
@@ -201,7 +187,6 @@ export const CUSTOM_CATEGORIES = {
     "Pirata One"
   ],
 
-  // Handwriting & Script - Personal, cursive, calligraphy
   handwriting: [
     "Pacifico",
     "Dancing Script",
@@ -234,7 +219,6 @@ export const CUSTOM_CATEGORIES = {
     "Euphoria Script"
   ],
 
-  // Modern & Minimal - Clean, geometric, contemporary
   modern: [
     "Inter",
     "Roboto",
@@ -267,7 +251,6 @@ export const CUSTOM_CATEGORIES = {
     "Hind"
   ],
 
-  // Bold & Impact - Headlines, posters, attention-grabbing
   bold: [
     "Anton",
     "Bebas Neue",
@@ -300,7 +283,6 @@ export const CUSTOM_CATEGORIES = {
     "Concert One"
   ],
 
-  // Futuristic & Tech - Sci-fi, digital, tech-inspired
   futuristic: [
     "Orbitron",
     "Audiowide",
@@ -325,7 +307,6 @@ export const CUSTOM_CATEGORIES = {
   ]
 };
 
-// Display names for categories (user-friendly labels)
 export const CATEGORY_LABELS = {
   all: "🌐 All Fonts",
   gaming: "🎮 Gaming & Action",
