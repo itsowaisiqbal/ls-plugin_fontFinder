@@ -14,12 +14,15 @@ A Lens Studio plugin to browse, preview, and download 1,900+ Google Fonts direct
 
 ## Installation
 
-1. Clone or download this repository
-2. Copy the `fontFinder` folder to your Lens Studio plugins directory:
-   - **macOS**: `~/Library/Application Support/Snap/Lens Studio/Plugins/`
-   - **Windows**: `%APPDATA%\Snap\Lens Studio\Plugins\`
-3. Restart Lens Studio
-4. Open the plugin via **Window > Panels > fontFinder**
+1. Clone this repository
+2. Open Lens Studio
+3. Go to **Preferences** (Lens Studio > Preferences on macOS, Edit > Preferences on Windows)
+4. Click on **Plugins**
+5. Under **Additional Libraries**, click **Add New Location**
+6. Locate the cloned repository folder and link it as the new location
+7. Check the **Plugins** list - `fontFinder` should appear
+8. Enable the `fontFinder` plugin
+9. Once enabled, go to **Window** menu and look for **fontFinder**
 
 ## Usage
 
@@ -48,10 +51,14 @@ Fonts are imported to: `Assets/fontFinder/{FontFamily}/`
 
 ## Technical Details
 
-- **Metadata**: Local `fonts.json` (no API calls required)
-- **Preview**: Google Fonts CDN for live rendering
+- **Architecture**: Built on Lens Studio PanelPlugin with custom category system
+- **Preview**: Google Fonts CDN for live rendering via WebEngineView
 - **Download**: Direct font file import via Lens Studio Asset Manager
 - **Permissions**: `filesystem`, `network`
+
+## Support
+
+For support, reach out to me on Instagram [@itsowaisiqbal](https://www.instagram.com/itsowaisiqbal/)
 
 ## License
 

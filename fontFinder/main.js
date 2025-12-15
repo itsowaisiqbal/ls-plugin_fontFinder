@@ -32,7 +32,7 @@ export class FontFinder extends PanelPlugin {
     this.tempDirs = []; 
     this.resetTimers = []; 
     this.currentCategory = "all";
-    this.localFontCache = {}; // Cache base64 encoded local fonts
+    this.localFontCache = {};   
   }
   
   downloadAndImportFont(font, variant) {
@@ -43,7 +43,6 @@ export class FontFinder extends PanelPlugin {
       return Promise.reject(new Error(`Font file not found for ${fontFamily} ${variant}`));
     }
     
-    // Check if it's a local font
     if (fontData.local || fontData.localPath) {
       return this.importLocalFont(fontData, variant);
     }
@@ -77,7 +76,6 @@ export class FontFinder extends PanelPlugin {
             const model = this._pluginSystem.findInterface(Editor.Model.IModel);
             const assetManager = model.project.assetManager;
             
-            // Create folder structure: fontFinder / FontFamily /
             const fontFinderFolder = `fontFinder`;
             const fontFamilyFolder = `${fontFinderFolder}/${fontFamily}`;
             
@@ -132,7 +130,6 @@ export class FontFinder extends PanelPlugin {
         const fontFamily = fontData.family;
         const localPath = fontData.localPath || fontData.files[variant];
         
-        // Get the plugin's directory path using import.meta.resolve
         const fontFileUrl = import.meta.resolve(localPath);
         const fontFilePath = new Editor.Path(fontFileUrl);
         
@@ -460,27 +457,21 @@ export class FontFinder extends PanelPlugin {
       const { weight, isItalic } = parseVariant(variant);
       const ital = isItalic ? 1 : 0;
       
-      // Check if it's a local font
       if (this.selectedFont.local || this.selectedFont.localPath) {
         try {
           const localPath = this.selectedFont.localPath || this.selectedFont.files[variant];
           
-          // Check cache first to avoid re-encoding on every preview update
           let base64Font = this.localFontCache[localPath];
           
           if (!base64Font) {
-            // Cache miss - read and encode the font
             const fontFileUrl = import.meta.resolve(localPath);
             const fontFilePath = new Editor.Path(fontFileUrl);
             
             if (FileSystem.exists(fontFilePath)) {
-              // Use readBytes for binary files like fonts
               const fontBytes = FileSystem.readBytes(fontFilePath);
               
-              // Use Lens Studio's Base64.encode instead of btoa
               base64Font = Base64.encode(fontBytes);
               
-              // Cache the result
               this.localFontCache[localPath] = base64Font;
             } else {
               throw new Error(`Local font file not found: ${localPath}`);
@@ -538,7 +529,6 @@ export class FontFinder extends PanelPlugin {
         }
       }
       
-      // Google Fonts preview
       const googleFamilyParam = `${encodeURIComponent(fontFamily)}:ital,wght@${ital},${weight}`;
       
       const html = `
@@ -812,15 +802,14 @@ export class FontFinder extends PanelPlugin {
     });
     
     typingArea.onTextChange.connect(() => {
-      updateCharCount(); // Update count immediately for better UX
+      updateCharCount();
       
       if (this.updateTimeout) {
         clearTimeout(this.updateTimeout);
       }
-      // Debounce preview updates to reduce load
       this.updateTimeout = setTimeout(() => {
         updatePreview();
-      }, 500); // Increased from 300ms to 500ms for better performance
+      }, 500);
     });
     
     searchInput.onTextChange.connect(() => {
