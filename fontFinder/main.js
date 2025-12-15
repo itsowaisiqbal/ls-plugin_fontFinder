@@ -22,6 +22,7 @@ export class FontFinder extends PanelPlugin {
   
   constructor(pluginSystem) {
     super(pluginSystem);
+    this._pluginSystem = pluginSystem;
     this.fonts = [];  
     this.categoryFonts = []; 
     this.selectedFont = null; 
@@ -31,6 +32,7 @@ export class FontFinder extends PanelPlugin {
     this.tempDirs = []; 
     this.resetTimers = []; 
     this.currentCategory = "all";
+    this.localFontCache = {}; // Cache base64 encoded local fonts
   }
   
   downloadAndImportFont(font, variant) {
@@ -39,6 +41,11 @@ export class FontFinder extends PanelPlugin {
     
     if (!fontData || !fontData.files || !fontData.files[variant]) {
       return Promise.reject(new Error(`Font file not found for ${fontFamily} ${variant}`));
+    }
+    
+    // Check if it's a local font
+    if (fontData.local || fontData.localPath) {
+      return this.importLocalFont(fontData, variant);
     }
     
     const fontUrl = fontData.files[variant];
@@ -67,7 +74,7 @@ export class FontFinder extends PanelPlugin {
               return;
             }
             
-            const model = this.pluginSystem.findInterface(Editor.Model.IModel);
+            const model = this._pluginSystem.findInterface(Editor.Model.IModel);
             const assetManager = model.project.assetManager;
             
             // Create folder structure: fontFinder / FontFamily /
@@ -116,6 +123,62 @@ export class FontFinder extends PanelPlugin {
           reject(new Error(`Download failed with status: ${response.statusCode}`));
         }
       });
+    });
+  }
+
+  importLocalFont(fontData, variant) {
+    return new Promise((resolve, reject) => {
+      try {
+        const fontFamily = fontData.family;
+        const localPath = fontData.localPath || fontData.files[variant];
+        
+        // Get the plugin's directory path using import.meta.resolve
+        const fontFileUrl = import.meta.resolve(localPath);
+        const fontFilePath = new Editor.Path(fontFileUrl);
+        
+        if (!FileSystem.exists(fontFilePath)) {
+          reject(new Error(`Local font file not found: ${localPath}`));
+          return;
+        }
+        
+        const model = this._pluginSystem.findInterface(Editor.Model.IModel);
+        const assetManager = model.project.assetManager;
+        
+        const fontFinderFolder = `fontFinder`;
+        const fontFamilyFolder = `${fontFinderFolder}/${fontFamily}`;
+        
+        const importResult = assetManager.importExternalFile(
+          fontFilePath,
+          fontFamilyFolder,
+          Editor.Model.ResultType.Auto
+        );
+        
+        let fontAsset = null;
+        if (importResult) {
+          if (importResult.primary) {
+            fontAsset = importResult.primary;
+          } else if (importResult.asset) {
+            fontAsset = importResult.asset;
+          } else {
+            fontAsset = importResult;
+          }
+        }
+        
+        if (fontAsset && fontAsset.name) {
+          resolve({ 
+            fontAsset, 
+            folder: fontFamilyFolder,
+            fontFamily,
+            variant 
+          });
+        } else {
+          reject(new Error('Font asset not found in import result'));
+        }
+        
+      } catch (error) {
+        console.error(`[FontFinder] Error importing local font:`, error.message);
+        reject(error);
+      }
     });
   }
 
@@ -303,6 +366,7 @@ export class FontFinder extends PanelPlugin {
       if (!variant) return "Regular";
       if (variant === "regular") return "Regular";
       if (variant === "italic") return "Italic";
+      if (variant === "display") return "Display";
       const isItalic = variant.indexOf("italic") !== -1;
       const weight = variant.replace("italic", "");
       return `${weight || "400"}${isItalic ? " Italic" : ""}`;
@@ -396,6 +460,85 @@ export class FontFinder extends PanelPlugin {
       const { weight, isItalic } = parseVariant(variant);
       const ital = isItalic ? 1 : 0;
       
+      // Check if it's a local font
+      if (this.selectedFont.local || this.selectedFont.localPath) {
+        try {
+          const localPath = this.selectedFont.localPath || this.selectedFont.files[variant];
+          
+          // Check cache first to avoid re-encoding on every preview update
+          let base64Font = this.localFontCache[localPath];
+          
+          if (!base64Font) {
+            // Cache miss - read and encode the font
+            const fontFileUrl = import.meta.resolve(localPath);
+            const fontFilePath = new Editor.Path(fontFileUrl);
+            
+            if (FileSystem.exists(fontFilePath)) {
+              // Use readBytes for binary files like fonts
+              const fontBytes = FileSystem.readBytes(fontFilePath);
+              
+              // Use Lens Studio's Base64.encode instead of btoa
+              base64Font = Base64.encode(fontBytes);
+              
+              // Cache the result
+              this.localFontCache[localPath] = base64Font;
+            } else {
+              throw new Error(`Local font file not found: ${localPath}`);
+            }
+          }
+          
+          if (base64Font) {
+            
+            const html = `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <meta charset="UTF-8">
+                <style>
+                  @font-face {
+                    font-family: '${fontFamily}';
+                    src: url(data:font/opentype;base64,${base64Font}) format('opentype');
+                  }
+                  html, body {
+                    margin: 0;
+                    padding: 0;
+                    height: 100%;
+                    overflow-y: auto;
+                  }
+                  body {
+                    padding: 20px;
+                    font-family: '${fontFamily}', sans-serif;
+                    font-size: 32px;
+                    background: #ffffff;
+                    color: #1f1f1f;
+                    word-wrap: break-word;
+                    overflow-wrap: break-word;
+                    line-height: 1.5;
+                    opacity: 0;
+                    animation: fadeIn 0.2s ease-in forwards;
+                  }
+                  @keyframes fadeIn {
+                    to { opacity: 1; }
+                  }
+                </style>
+              </head>
+              <body>
+                ${text.replace(/\n/g, '<br>')}
+              </body>
+              </html>
+            `;
+            
+            const dataUri = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+            previewArea.load(dataUri);
+            previewSpinner.visible = false;
+            return;
+          }
+        } catch (error) {
+          console.error(`[FontFinder] Error loading local font preview:`, error.message);
+        }
+      }
+      
+      // Google Fonts preview
       const googleFamilyParam = `${encodeURIComponent(fontFamily)}:ital,wght@${ital},${weight}`;
       
       const html = `
@@ -611,7 +754,7 @@ export class FontFinder extends PanelPlugin {
     
     this.panelWidget = outerContainer;
     
-    const categoryOrder = ['all', 'gaming', 'fantasy', 'branded', 'fun', 'elegant', 'retro', 'handwriting', 'modern', 'bold', 'futuristic'];
+    const categoryOrder = ['all', 'gaming', 'fantasy', 'branded', 'fun', 'elegant', 'retro', 'handwriting', 'modern', 'bold', 'futuristic', 'thatowais'];
     
     categoryOrder.forEach(catKey => {
       const displayName = CATEGORY_LABELS[catKey] || catKey;
@@ -669,13 +812,15 @@ export class FontFinder extends PanelPlugin {
     });
     
     typingArea.onTextChange.connect(() => {
+      updateCharCount(); // Update count immediately for better UX
+      
       if (this.updateTimeout) {
         clearTimeout(this.updateTimeout);
       }
+      // Debounce preview updates to reduce load
       this.updateTimeout = setTimeout(() => {
-        updateCharCount();
         updatePreview();
-      }, 300); 
+      }, 500); // Increased from 300ms to 500ms for better performance
     });
     
     searchInput.onTextChange.connect(() => {

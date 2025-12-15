@@ -1,9 +1,27 @@
 {
   "version": "1.0",
-  "lastUpdated": "2025-12-14",
-  "totalFonts": 1916,
+  "lastUpdated": "2025-12-15",
+  "totalFonts": 1917,
   "categories": {
     "popular": [
+      {
+        "family": "Turpentine",
+        "local": true,
+        "localPath": "localFonts/Turpentine-Display.otf",
+        "variants": [
+          "display"
+        ],
+        "subsets": [
+          "latin"
+        ],
+        "version": "1.0",
+        "lastModified": "2025-12-15",
+        "files": {
+          "display": "localFonts/Turpentine-Display.otf"
+        },
+        "category": "display",
+        "kind": "localfont"
+      },
       {
         "family": "Roboto",
         "variants": [

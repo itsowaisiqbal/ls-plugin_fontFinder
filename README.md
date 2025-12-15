@@ -44,6 +44,7 @@ Fonts are imported to: `Assets/fontFinder/{FontFamily}/`
 - 🔷 Modern & Minimal
 - 💪 Bold & Impact
 - 🚀 Futuristic & Tech
+- 👤 thatowais (https://www.instagram.com/thatowais/)
 
 ## Technical Details
 

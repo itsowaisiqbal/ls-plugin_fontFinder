@@ -304,6 +304,10 @@ export const CUSTOM_CATEGORIES = {
     "Wallpoet",
     "Syncopate",
     "Iceland"
+  ],
+
+  thatowais: [
+    "Turpentine"
   ]
 };
 
@@ -318,5 +322,6 @@ export const CATEGORY_LABELS = {
   handwriting: "✍️ Handwriting & Script",
   modern: "🔷 Modern & Minimal",
   bold: "💪 Bold & Impact",
-  futuristic: "🚀 Futuristic & Tech"
+  futuristic: "🚀 Futuristic & Tech",
+  thatowais: "👤 thatowais"
 };
