@@ -5,6 +5,7 @@ A Lens Studio plugin to browse, preview, and download 1,900+ Google Fonts direct
 ## Features
 
 - 🎨 **1,900+ Fonts** - Complete Google Fonts library
+- 📐 **Full Font Variants** - Access all weights (100-900) and styles (regular, italic, bold) for each font family
 - 🎮 **Curated Categories** - Gaming, Fantasy, Branded, Retro, Modern, and more
 - 👀 **Live Preview** - See fonts in real-time before downloading
 - ⚡ **No API Key** - Works offline with embedded font metadata
@@ -28,7 +29,7 @@ A Lens Studio plugin to browse, preview, and download 1,900+ Google Fonts direct
 
 1. **Browse** - Select a category or search for a font
 2. **Preview** - See the font displayed in real-time
-3. **Customize** - Choose font weight/style variant
+3. **Customize** - Choose from all available font variants (100, 200, 300, regular, 500, 600, 700, 800, 900, and their italic variants)
 4. **Test** - Type custom text to preview
 5. **Download** - Click "Download Font" to add it to your project
 
