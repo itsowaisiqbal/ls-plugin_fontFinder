@@ -13,6 +13,11 @@ A Lens Studio plugin to browse, preview, and download 1,900+ Google Fonts direct
 - ✨ **Surprise Me** - Random font picker per category
 - ⬇️ **One-Click Download** - Fonts import directly to your project
 
+## Requirements
+
+- **Lens Studio**: 5.13.0 or later
+- **Permissions**: `filesystem`, `network`
+
 ## Installation
 
 1. Clone this repository
@@ -35,6 +40,10 @@ A Lens Studio plugin to browse, preview, and download 1,900+ Google Fonts direct
 
 Fonts are imported to: `Assets/fontFinder/{FontFamily}/`
 
+## Tutorial
+
+📺 **Video Tutorial**: [Watch on YouTube](https://youtu.be/1yKc_oeXdT8?si=n0hbTiYsnQKgKNjV)
+
 ## Categories
 
 - 🌐 All Fonts
@@ -55,7 +64,6 @@ Fonts are imported to: `Assets/fontFinder/{FontFamily}/`
 - **Architecture**: Built on Lens Studio PanelPlugin with custom category system
 - **Preview**: Google Fonts CDN for live rendering via WebEngineView
 - **Download**: Direct font file import via Lens Studio Asset Manager
-- **Permissions**: `filesystem`, `network`
 
 ## Support
 
